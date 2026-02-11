@@ -22,6 +22,7 @@ PolicyFilter
 from __future__ import annotations
 
 import logging
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -230,6 +231,7 @@ class BudgetChecker(BaseConstraintChecker):
         self._total_budget = total_budget
         self._spent: float = 0.0
         self._name = name
+        self._lock = threading.Lock()
 
     @property
     def budget_remaining(self) -> float:
@@ -243,7 +245,8 @@ class BudgetChecker(BaseConstraintChecker):
 
     def record_cost(self, cost: float) -> None:
         """Record a cost expenditure (called after action execution)."""
-        self._spent += cost
+        with self._lock:
+            self._spent += cost
 
     def reset(self) -> None:
         """Reset the budget tracker.
@@ -252,7 +255,8 @@ class BudgetChecker(BaseConstraintChecker):
         instance across multiple graph invocations, otherwise the accumulated
         cost from previous runs carries over.
         """
-        self._spent = 0.0
+        with self._lock:
+            self._spent = 0.0
 
     def check(
         self,

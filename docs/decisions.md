@@ -85,10 +85,25 @@
 - **Choice:** Added `ConstraintResult` frozen dataclass (`passed`, `message`, `severity`, `checker_name`, `suggested_mitigation`, `metadata`). `check_detailed()` on BaseConstraintChecker returns `ConstraintResult` (default wraps `check()`). `ConstraintPipeline.check_all_detailed()` returns `list[ConstraintResult]`.
 - **Rationale:** Opt-in — existing `check()` and `check_all()` are unchanged. `check_detailed()` provides a richer interface for consumers that need severity-based decision-making. Default implementation wraps `check()` so no existing checker needs modification.
 
-### Goal.revise() Mutation Documented, Not Changed
-- **Context:** `Goal.revise()` mutates `self.status = GoalStatus.REVISED` in-place, which is unexpected on a method that also returns a new Goal.
-- **Choice:** Documented the intentional mutation in the docstring. Did not change the behavior.
-- **Rationale:** The mutation is by design — once revised, the original goal is no longer active. Changing this would break the entire revision lineage system. Clear documentation is the right fix.
+### Goal Immutability (Frozen Dataclass)
+- **Context:** `Goal.revise()` mutated `self.status = GoalStatus.REVISED` in-place, breaking functional node contracts. Lifecycle methods (`achieve`, `abandon`, `suspend`, `reactivate`) also mutated in-place. Haidemariam (2026) treats G_t → G_{t+1} as producing a NEW goal entity.
+- **Choice:** Made `Goal` a frozen dataclass (`@dataclass(frozen=True)`). All lifecycle methods now return new `Goal` instances via `dataclasses.replace()`. `revise()` no longer sets `self.status = REVISED` — the old goal is simply replaced.
+- **Rationale:** Paper alignment: goals are immutable values. Frozen dataclasses prevent accidental state corruption in concurrent or checkpointed contexts. All callers already used the return value from `revise()` — removing the side-effect is safe.
+
+### Revision Threshold Semantics
+- **Context:** The `should_revise` edge used `abs(score) >= 0.5 or score <= -0.3`, meaning GOOD scores (e.g., 0.8) also triggered revision — counterintuitive and paper-incorrect.
+- **Choice:** Changed to `score <= -0.3` only. Good scores indicate the agent is on track and should not trigger revision.
+- **Rationale:** Paper says revision happens when evaluation indicates poor performance. A score of 0.8 means "close to goal achieved" — revision would be counterproductive.
+
+### Thread Safety via threading.Lock on Mutable Shared State
+- **Context:** `BudgetChecker`, `EvolvingConstraintManager`, `IntentionalGroundingManager`, and `GoalTree` have mutable state accessed during graph execution. Multi-agent and parallel graphs could corrupt this state.
+- **Choice:** Added `threading.Lock()` to all four classes, wrapping mutating methods. Recursive/nested calls use internal `_locked` methods to avoid deadlock.
+- **Rationale:** Minimal overhead for single-threaded usage. Correctness guarantee for multi-agent/parallel execution. Goal immutability (Phase 2) handles Goal itself — locks handle the containers.
+
+### Class-Level ThreadPoolExecutor for LLM Services
+- **Context:** All 4 LLM services created a new `ThreadPoolExecutor` per `invoke` call when timeout was set, causing resource leaks.
+- **Choice:** Moved executor creation to `__init__` (one per service instance). Added `shutdown()` method to all services and `LLMNegotiator`.
+- **Rationale:** One executor per service instance matches the lifecycle. `shutdown()` enables clean cleanup in long-running processes.
 
 ### Observation Enrichment Over Service Signature Changes
 - **Context:** LLM services (evaluator, planner, reviser) had no memory of previous steps — they saw only the current snapshot.
@@ -149,10 +164,15 @@
 - **Choice:** `IntentionalGroundingManager` supports both LLM-based and rule-based grounding. Rule-based fallback triggers when high-priority directives exceed threshold.
 - **Rationale:** Enables grounding in numeric-mode agents without an LLM. LLM mode provides richer assessment when available.
 
-### BDI Bridge via Node Factories
-- **Context:** BDI agent exists but is disconnected from LangGraph.
-- **Choice:** Factory functions (`make_bdi_*_node`) wrap BDI agent methods as LangGraph nodes. `build_bdi_teleological_graph()` compiles a full graph with BDI-augmented nodes.
-- **Rationale:** Factory functions keep the bridge lightweight and composable. BDI methods augment (not replace) standard nodes — falling back to standard behavior when BDI doesn't trigger.
+### Intentional State Mapping Bridge via Node Factories
+- **Context:** Intentional State agent exists but was disconnected from LangGraph.
+- **Choice:** Factory functions (`make_intentional_*_node`) wrap IntentionalStateAgent methods as LangGraph nodes. `build_intentional_teleological_graph()` compiles a full graph with intentional-state-augmented nodes.
+- **Rationale:** Factory functions keep the bridge lightweight and composable. Intentional state methods augment (not replace) standard nodes — falling back to standard behavior when the agent doesn't trigger.
+
+### BDI → Intentional State Mapping Rename
+- **Context:** The "BDI" label carries philosophical baggage from the Bratman/Rao-Georgeff tradition that doesn't fully map to Haidemariam's framework. Senior review flagged this as confusing positioning.
+- **Choice:** Renamed all BDI-labeled code to "Intentional State Mapping" (ISM). `BDIAgent` → `IntentionalStateAgent`, `bdi_bridge.py` → `intentional_bridge.py`, all factory functions and graph builders renamed. Old files kept as thin backward-compatibility shims re-exporting new names.
+- **Rationale:** ISM accurately describes what the bridge does — mapping intentional states (beliefs, desires, intentions) to LangGraph nodes — without claiming adherence to a specific philosophical tradition. Backward-compat shims prevent breaking existing code.
 
 ---
 
@@ -198,10 +218,10 @@
 - **Choice:** `AgentState` enum with `_VALID_TRANSITIONS` dict. `_transition_to()` validates transitions.
 - **Rationale:** Prevents invalid state sequences (e.g., acting before evaluating). The FSM is fundamental to the teleological loop structure. Invalid transitions raise `ValueError` immediately.
 
-### BDI Agent as Alternative Reference Implementation
-- **Context:** Need to validate the framework against classical BDI (Belief-Desire-Intention) agent architecture.
-- **Choice:** `BDIAgent(BaseAgent)` mapping Beliefs→S_t, Desires→G_t, Intentions→π_t.
-- **Rationale:** BDI is the most widely understood agent architecture. Having it alongside TeleologicalAgent demonstrates the framework's flexibility and enables direct comparison in benchmarks.
+### Intentional State Agent as Alternative Reference Implementation
+- **Context:** Need to validate the framework against classical belief-desire-intention agent architecture.
+- **Choice:** `IntentionalStateAgent(BaseAgent)` mapping Beliefs→S_t, Desires→G_t, Intentions→π_t.
+- **Rationale:** Intentional state mapping is the most widely understood agent architecture. Having it alongside TeleologicalAgent demonstrates the framework's flexibility and enables direct comparison in benchmarks.
 
 ### Fluent Builder for Agent Construction
 - **Context:** Fully configured agents require evaluator + updater + planner + constraints + event bus + optional LLM provider.
@@ -304,3 +324,22 @@
 - **Context:** Console dashboard and plotting are nice-to-have but shouldn't be required dependencies.
 - **Choice:** Rich and matplotlib are optional (`[viz]` extra). All presentation modules gracefully degrade to plain-text output when dependencies are missing.
 - **Rationale:** Core framework stays lightweight. `presentation/console.py` renders plain-text tables if Rich is unavailable. `presentation/plots.py` raises ImportError only when plotting functions are called.
+
+---
+
+## Environment Layer
+
+### PyTorch-Style state_dict / load_state_dict
+- **Context:** Environments had no serialization mechanism — saving and restoring state required ad-hoc code.
+- **Choice:** Added `state_dict()` and `load_state_dict()` to `BaseEnvironment`, mirroring PyTorch's `nn.Module` serialization API. Subclasses implement `_state_dict_impl()` / `_load_state_dict_impl()` hooks.
+- **Rationale:** PyTorch conventions are well-understood by ML practitioners. Template Method pattern keeps BaseEnvironment clean while allowing each environment to serialize its own state. All 4 environments implement the hooks.
+
+### EnvironmentWrapper (Composable Decorator Pattern)
+- **Context:** Users need to modify environment behavior (add noise, track history, enforce quotas) without subclassing.
+- **Choice:** `EnvironmentWrapper(BaseEnvironment)` base class (like `gym.Wrapper`) that delegates all methods to a wrapped environment. Three concrete wrappers: `NoisyObservationWrapper`, `HistoryTrackingWrapper`, `ResourceQuotaWrapper`.
+- **Rationale:** Decorator pattern enables composable modifications. Multiple wrappers can be stacked: `ResourceQuotaWrapper(NoisyObservationWrapper(env))`. The `unwrapped` property always returns the innermost concrete environment.
+
+### Bounded Accumulation Channels
+- **Context:** Append-only state channels (`events`, `eval_history`, `action_history`, `reasoning_trace`, `action_feedback`, `goal_history`) grow without bound, causing memory bloat in long-running agents.
+- **Choice:** `make_bounded_state(max_history)` factory creates a `BoundedTeleologicalState` TypedDict where all append channels use a `_make_bounded_add(max_size)` reducer that keeps only the last N items. `GraphBuilder.with_max_history(n)` integrates this. `build_teleological_graph()` accepts optional `state_schema`.
+- **Rationale:** Opt-in — default `TeleologicalState` is still unbounded. Bounded variant drops oldest entries (FIFO), which is the natural choice for history channels. Factory function approach avoids class proliferation while keeping LangGraph's runtime type resolution working correctly.

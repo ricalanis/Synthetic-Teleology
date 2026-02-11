@@ -285,6 +285,29 @@ class ResourceEnvironment(BaseEnvironment):
             metadata={"step": 0, "reset": True},
         )
 
+    # -- state serialization -------------------------------------------------
+
+    def _state_dict_impl(self) -> dict[str, Any]:
+        return {
+            "levels": list(float(v) for v in self._levels),
+            "capacity": list(float(v) for v in self._capacity),
+            "regen_rate": list(float(v) for v in self._regen_rate),
+            "total_consumed": list(float(v) for v in self._total_consumed),
+            "total_regenerated": list(float(v) for v in self._total_regenerated),
+        }
+
+    def _load_state_dict_impl(self, state: dict[str, Any]) -> None:
+        if "levels" in state:
+            self._levels = np.array(state["levels"], dtype=np.float64)
+        if "capacity" in state:
+            self._capacity = np.array(state["capacity"], dtype=np.float64)
+        if "regen_rate" in state:
+            self._regen_rate = np.array(state["regen_rate"], dtype=np.float64)
+        if "total_consumed" in state:
+            self._total_consumed = np.array(state["total_consumed"], dtype=np.float64)
+        if "total_regenerated" in state:
+            self._total_regenerated = np.array(state["total_regenerated"], dtype=np.float64)
+
     # -- perturbation -------------------------------------------------------
 
     def _apply_perturbation(self, perturbation: dict[str, Any]) -> None:

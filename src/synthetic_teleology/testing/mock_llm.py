@@ -82,3 +82,58 @@ class MockStructuredChatModel(BaseChatModel):
                 return resp
 
         return _MultiStructuredRunnable()
+
+
+class PromptCapturingMock(MockStructuredChatModel):
+    """Records all prompts received for test assertion.
+
+    Usage::
+
+        model = PromptCapturingMock(
+            structured_responses=[my_response_1, my_response_2],
+        )
+        # ... use model in services ...
+        assert "goal description" in model.captured_prompts[0]
+    """
+
+    captured_prompts: list[str] = []
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        # Capture the full prompt text
+        prompt_text = "\n".join(
+            getattr(m, "content", str(m)) for m in messages
+        )
+        self.captured_prompts.append(prompt_text)
+        return super()._generate(messages, stop, run_manager, **kwargs)
+
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
+        """Return a capturing runnable."""
+        model_ref = self
+
+        class _CapturingStructuredRunnable(RunnableSerializable):
+            model_config = ConfigDict(arbitrary_types_allowed=True)
+
+            def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
+                nonlocal model_ref
+                # Capture the prompt (input may be a string or list of messages)
+                if isinstance(input, str):
+                    model_ref.captured_prompts.append(input)
+                elif isinstance(input, list):
+                    text = "\n".join(
+                        getattr(m, "content", str(m)) for m in input
+                    )
+                    model_ref.captured_prompts.append(text)
+                else:
+                    model_ref.captured_prompts.append(str(input))
+                idx = model_ref._call_index % len(model_ref.structured_responses)
+                resp = model_ref.structured_responses[idx]
+                model_ref._call_index += 1
+                return resp
+
+        return _CapturingStructuredRunnable()

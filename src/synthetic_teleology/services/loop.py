@@ -234,7 +234,9 @@ class BaseAgenticLoop(ABC):
             return StopReason.GOAL_ABANDONED
 
         if eval_signal.score >= self._goal_achieved_threshold:
-            goal.achieve()
+            # Goal is frozen; caller must capture the returned reason
+            # and update their reference. The achieved goal is returned
+            # via RunResult.final_goal.
             return StopReason.GOAL_ACHIEVED
 
         if self._stop_on_empty_policy and policy.size == 0:
@@ -482,6 +484,8 @@ class SyncAgenticLoop(BaseAgenticLoop):
                 )
                 if reason is not None:
                     stop_reason = reason
+                    if reason == StopReason.GOAL_ACHIEVED:
+                        current_goal = current_goal.achieve()
                     # Still emit event before stopping
                     event = self._emit_event(
                         step, current_goal, current_state, last_eval, None
@@ -808,6 +812,8 @@ class AsyncAgenticLoop(BaseAgenticLoop):
                 )
                 if reason is not None:
                     stop_reason = reason
+                    if reason == StopReason.GOAL_ACHIEVED:
+                        current_goal = current_goal.achieve()
                     event = await self._async_emit_event(
                         step, current_goal, current_state, last_eval, None
                     )

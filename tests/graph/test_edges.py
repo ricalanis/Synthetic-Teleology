@@ -27,9 +27,10 @@ class TestShouldContinue:
 
 class TestShouldRevise:
 
-    def test_revise_on_high_positive_score(self) -> None:
+    def test_no_revise_on_high_positive_score(self) -> None:
+        """Good scores should NOT trigger revision (paper alignment)."""
         state = {"eval_signal": EvalSignal(score=0.8, confidence=0.9)}
-        assert should_revise(state) == "revise"
+        assert should_revise(state) == "check_constraints"
 
     def test_revise_on_negative_score(self) -> None:
         state = {"eval_signal": EvalSignal(score=-0.5, confidence=0.9)}
@@ -43,10 +44,20 @@ class TestShouldRevise:
         state: dict = {}
         assert should_revise(state) == "check_constraints"
 
-    def test_revise_at_boundary(self) -> None:
+    def test_no_revise_at_old_boundary(self) -> None:
+        """score=0.5 is good performance — should not revise."""
         state = {"eval_signal": EvalSignal(score=0.5, confidence=0.9)}
+        assert should_revise(state) == "check_constraints"
+
+    def test_revise_at_negative_boundary(self) -> None:
+        """Exactly -0.3 should trigger revision."""
+        state = {"eval_signal": EvalSignal(score=-0.3, confidence=0.9)}
         assert should_revise(state) == "revise"
 
-    def test_skip_revise_just_below_boundary(self) -> None:
-        state = {"eval_signal": EvalSignal(score=0.49, confidence=0.9)}
+    def test_no_revise_just_above_negative_boundary(self) -> None:
+        state = {"eval_signal": EvalSignal(score=-0.29, confidence=0.9)}
         assert should_revise(state) == "check_constraints"
+
+    def test_revise_on_very_negative_score(self) -> None:
+        state = {"eval_signal": EvalSignal(score=-0.4, confidence=0.9)}
+        assert should_revise(state) == "revise"

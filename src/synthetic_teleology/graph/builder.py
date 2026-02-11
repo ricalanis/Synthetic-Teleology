@@ -10,8 +10,6 @@
 The builder detects which mode based on whether ``.with_model()`` was called.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from typing import Any
 
@@ -107,12 +105,13 @@ class GraphBuilder:
         self._grounding_manager: Any | None = None
         self._human_approval_before: list[str] = []
         self._human_approval_after: list[str] = []
-        self._bdi_agent: Any | None = None
+        self._intentional_agent: Any | None = None
         self._evolving_constraint_manager: Any | None = None
+        self._max_history: int | None = None
 
     # -- NEW: LLM-first API --------------------------------------------------
 
-    def with_model(self, model: Any) -> GraphBuilder:
+    def with_model(self, model: Any) -> "GraphBuilder":
         """Set the LangChain chat model (enables LLM mode).
 
         Parameters
@@ -130,7 +129,7 @@ class GraphBuilder:
         values: tuple[float, ...] | None = None,
         directions: tuple[Direction, ...] | None = None,
         name: str = "",
-    ) -> GraphBuilder:
+    ) -> "GraphBuilder":
         """Set goal from natural language description or a Goal entity.
 
         Parameters
@@ -165,22 +164,22 @@ class GraphBuilder:
         )
         return self
 
-    def with_tools(self, *tools: Any) -> GraphBuilder:
+    def with_tools(self, *tools: Any) -> "GraphBuilder":
         """Add LangChain tools the agent can use as actions."""
         self._tools.extend(tools)
         return self
 
-    def with_constraints(self, *constraints: str) -> GraphBuilder:
+    def with_constraints(self, *constraints: str) -> "GraphBuilder":
         """Add natural language constraints for LLM-based checking."""
         self._constraint_descriptions.extend(constraints)
         return self
 
-    def with_num_hypotheses(self, n: int) -> GraphBuilder:
+    def with_num_hypotheses(self, n: int) -> "GraphBuilder":
         """How many plan candidates the LLM should generate."""
         self._num_hypotheses = n
         return self
 
-    def with_temperature(self, temp: float) -> GraphBuilder:
+    def with_temperature(self, temp: float) -> "GraphBuilder":
         """LLM sampling temperature (higher = more exploratory)."""
         self._temperature = temp
         return self
@@ -193,7 +192,7 @@ class GraphBuilder:
         directions: tuple[Direction, ...] | None = None,
         weights: tuple[float, ...] | None = None,
         goal_name: str = "",
-    ) -> GraphBuilder:
+    ) -> "GraphBuilder":
         """Create a goal from raw objective parameters (numeric mode)."""
         dirs = directions or tuple(Direction.APPROACH for _ in values)
         objective = ObjectiveVector(values=values, directions=dirs, weights=weights)
@@ -203,42 +202,42 @@ class GraphBuilder:
         )
         return self
 
-    def with_evaluator(self, evaluator: BaseEvaluator) -> GraphBuilder:
+    def with_evaluator(self, evaluator: BaseEvaluator) -> "GraphBuilder":
         """Override the default evaluator."""
         self._evaluator = evaluator
         return self
 
-    def with_goal_updater(self, updater: BaseGoalUpdater) -> GraphBuilder:
+    def with_goal_updater(self, updater: BaseGoalUpdater) -> "GraphBuilder":
         """Override the default goal-revision strategy."""
         self._updater = updater
         return self
 
-    def with_planner(self, planner: BasePlanner) -> GraphBuilder:
+    def with_planner(self, planner: BasePlanner) -> "GraphBuilder":
         """Override the default planner."""
         self._planner = planner
         return self
 
-    def with_constraint_checkers(self, *checkers: Any) -> GraphBuilder:
+    def with_constraint_checkers(self, *checkers: Any) -> "GraphBuilder":
         """Add constraint checkers (numeric mode)."""
         self._constraint_checkers.extend(checkers)
         return self
 
-    def with_checkpointer(self, checkpointer: Any) -> GraphBuilder:
+    def with_checkpointer(self, checkpointer: Any) -> "GraphBuilder":
         """Set a LangGraph checkpointer for persistence."""
         self._checkpointer = checkpointer
         return self
 
-    def with_action_step_size(self, step_size: float) -> GraphBuilder:
+    def with_action_step_size(self, step_size: float) -> "GraphBuilder":
         """Set step size for auto-generated action space (numeric mode)."""
         self._action_step_size = step_size
         return self
 
-    def with_max_steps(self, max_steps: int) -> GraphBuilder:
+    def with_max_steps(self, max_steps: int) -> "GraphBuilder":
         """Set maximum loop iterations."""
         self._max_steps = max_steps
         return self
 
-    def with_goal_achieved_threshold(self, threshold: float) -> GraphBuilder:
+    def with_goal_achieved_threshold(self, threshold: float) -> "GraphBuilder":
         """Set the eval score threshold for goal achievement."""
         self._goal_achieved_threshold = threshold
         return self
@@ -248,7 +247,7 @@ class GraphBuilder:
         perceive_fn: Callable | None = None,
         act_fn: Callable | None = None,
         transition_fn: Callable | None = None,
-    ) -> GraphBuilder:
+    ) -> "GraphBuilder":
         """Set environment interaction functions."""
         if perceive_fn is not None:
             self._perceive_fn = perceive_fn
@@ -258,17 +257,17 @@ class GraphBuilder:
             self._transition_fn = transition_fn
         return self
 
-    def with_knowledge_store(self, store: Any) -> GraphBuilder:
+    def with_knowledge_store(self, store: Any) -> "GraphBuilder":
         """Attach a KnowledgeStore for metacognitive commons."""
         self._knowledge_store = store
         return self
 
-    def with_audit_trail(self, trail: Any) -> GraphBuilder:
+    def with_audit_trail(self, trail: Any) -> "GraphBuilder":
         """Attach a GoalAuditTrail for revision tracking."""
         self._audit_trail = trail
         return self
 
-    def with_grounding_manager(self, manager: Any) -> GraphBuilder:
+    def with_grounding_manager(self, manager: Any) -> "GraphBuilder":
         """Attach an IntentionalGroundingManager."""
         self._grounding_manager = manager
         return self
@@ -277,7 +276,7 @@ class GraphBuilder:
         self,
         before: list[str] | None = None,
         after: list[str] | None = None,
-    ) -> GraphBuilder:
+    ) -> "GraphBuilder":
         """Set human-in-the-loop interrupt points.
 
         Parameters
@@ -293,17 +292,36 @@ class GraphBuilder:
             self._human_approval_after = after
         return self
 
-    def with_bdi_agent(self, bdi_agent: Any) -> GraphBuilder:
-        """Attach a BDI agent for BDI-LangGraph bridge."""
-        self._bdi_agent = bdi_agent
+    def with_intentional_agent(self, agent: Any) -> "GraphBuilder":
+        """Attach an intentional-state agent for the ISM-LangGraph bridge."""
+        self._intentional_agent = agent
         return self
 
-    def with_evolving_constraints(self, manager: Any) -> GraphBuilder:
+    def with_bdi_agent(self, bdi_agent: Any) -> "GraphBuilder":
+        """Deprecated: use :meth:`with_intentional_agent` instead."""
+        return self.with_intentional_agent(bdi_agent)
+
+    def with_evolving_constraints(self, manager: Any) -> "GraphBuilder":
         """Attach an EvolvingConstraintManager for co-evolutionary constraints."""
         self._evolving_constraint_manager = manager
         return self
 
-    def with_metadata(self, **kwargs: Any) -> GraphBuilder:
+    def with_max_history(self, max_history: int) -> "GraphBuilder":
+        """Set maximum entries per accumulation channel (bounded state).
+
+        When set, the graph uses ``BoundedTeleologicalState`` instead of
+        the default ``TeleologicalState``, capping all append-only channels
+        to prevent unbounded memory growth.
+
+        Parameters
+        ----------
+        max_history:
+            Maximum entries per channel (events, eval_history, etc.).
+        """
+        self._max_history = max_history
+        return self
+
+    def with_metadata(self, **kwargs: Any) -> "GraphBuilder":
         """Set additional metadata."""
         self._metadata.update(kwargs)
         return self
@@ -392,6 +410,12 @@ class GraphBuilder:
 
             perceive_fn = _default_llm_perceive
 
+        state_schema = None
+        if self._max_history is not None:
+            from synthetic_teleology.graph.state import make_bounded_state
+
+            state_schema = make_bounded_state(self._max_history)
+
         app = build_teleological_graph(
             checkpointer=self._checkpointer,
             interrupt_before=self._human_approval_before or None,
@@ -403,6 +427,7 @@ class GraphBuilder:
             constraint_pipeline=pipeline,
             policy_filter=policy_filter,
             enable_evolving_constraints=self._evolving_constraint_manager is not None,
+            state_schema=state_schema,
         )
 
         initial_state: dict[str, Any] = {
@@ -461,6 +486,12 @@ class GraphBuilder:
         pipeline = ConstraintPipeline(checkers=self._constraint_checkers)
         policy_filter = PolicyFilter(pipeline)
 
+        state_schema = None
+        if self._max_history is not None:
+            from synthetic_teleology.graph.state import make_bounded_state
+
+            state_schema = make_bounded_state(self._max_history)
+
         app = build_teleological_graph(
             checkpointer=self._checkpointer,
             interrupt_before=self._human_approval_before or None,
@@ -472,6 +503,7 @@ class GraphBuilder:
             constraint_pipeline=pipeline,
             policy_filter=policy_filter,
             enable_evolving_constraints=self._evolving_constraint_manager is not None,
+            state_schema=state_schema,
         )
 
         initial_state: dict[str, Any] = {

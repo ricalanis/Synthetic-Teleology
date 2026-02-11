@@ -256,6 +256,26 @@ class ResearchEnvironment(BaseEnvironment):
             metadata={"step": 0, "reset": True}
         )
 
+    # -- state serialization -------------------------------------------------
+
+    def _state_dict_impl(self) -> dict[str, Any]:
+        return {
+            "knowledge": list(float(v) for v in self._knowledge),
+            "synthesis_quality": self._synthesis_quality,
+            "novelty": self._novelty,
+            "research_counts": list(float(v) for v in self._research_counts),
+        }
+
+    def _load_state_dict_impl(self, state: dict[str, Any]) -> None:
+        if "knowledge" in state:
+            self._knowledge = np.array(state["knowledge"], dtype=np.float64)
+        if "synthesis_quality" in state:
+            self._synthesis_quality = float(state["synthesis_quality"])
+        if "novelty" in state:
+            self._novelty = float(state["novelty"])
+        if "research_counts" in state:
+            self._research_counts = np.array(state["research_counts"], dtype=np.float64)
+
     # -- action implementations ---------------------------------------------
 
     def _do_research(self, action: ActionSpec, effort: float) -> None:

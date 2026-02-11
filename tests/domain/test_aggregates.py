@@ -48,7 +48,8 @@ class TestGoalTree:
         child = Goal(goal_id="child1", name="child1", objective=obj)
         tree.add_subgoal("root", child)
         assert tree.size == 2
-        assert child.parent_id == "root"
+        # Goal is frozen — retrieve from tree to see parent_id
+        assert tree.get_goal("child1").parent_id == "root"
         children = tree.get_children("root")
         assert len(children) == 1
         assert children[0].goal_id == "child1"
@@ -124,7 +125,10 @@ class TestGoalTree:
     ) -> None:
         child = Goal(goal_id="c1", name="c1", objective=obj)
         tree.add_subgoal("root", child)
-        tree.root.abandon()  # root is now non-active
+        # Goal is frozen — replace root with abandoned version
+        abandoned_root = tree.root.abandon()
+        tree._root = abandoned_root
+        tree._all_goals["root"] = abandoned_root
 
         issues = tree.validate_coherence()
         assert len(issues) >= 1

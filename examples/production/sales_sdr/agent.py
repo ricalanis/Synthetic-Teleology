@@ -1,5 +1,15 @@
-"""Graph wiring for the Sales SDR agent."""
+"""Graph wiring for the Sales SDR agent.
 
+Uses LLM mode (with_model + with_goal) for text-based goal description,
+while keeping custom CRM-specific evaluator and planner that override
+the LLM defaults.
+
+In simulated mode (no API key), uses MockStructuredChatModel.
+The mock only needs RevisionOutput responses since evaluator/planner
+are custom implementations.
+"""
+
+import os
 import time
 
 from synthetic_teleology.domain.values import ActionSpec, PolicySpec, StateSnapshot
@@ -75,6 +85,38 @@ def _execute_outreach(
     })
 
 
+def _get_model():
+    """Get a real or mock LLM model.
+
+    In LLM mode, the model is used by the LLMReviser for goal revision.
+    Custom evaluator and planner override the LLM defaults, so the model
+    is only needed for revision reasoning.
+    """
+    if os.getenv("ANTHROPIC_API_KEY"):
+        try:
+            from langchain_anthropic import ChatAnthropic
+            return ChatAnthropic(model="claude-sonnet-4-5-20250929", temperature=0.5)
+        except ImportError:
+            pass
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(model="gpt-4o", temperature=0.5)
+        except ImportError:
+            pass
+
+    # Simulated mode: mock provides RevisionOutput responses
+    from synthetic_teleology.services.llm_revision import RevisionOutput
+    from synthetic_teleology.testing import MockStructuredChatModel
+
+    return MockStructuredChatModel(structured_responses=[
+        RevisionOutput(
+            should_revise=False,
+            reasoning="Pipeline progressing, no goal revision needed",
+        ),
+    ])
+
+
 def build_sdr_agent(
     crm: CRMProvider,
     meeting_target: int = 5,
@@ -82,6 +124,9 @@ def build_sdr_agent(
     seed: int = 42,
 ):
     """Build a LangGraph sales SDR agent.
+
+    Uses LLM mode (with_model + with_goal) for text-based goal with
+    custom CRM-specific evaluator and planner.
 
     Returns ``(app, initial_state, leads, metrics, outreach_log)`` tuple.
     """
@@ -109,9 +154,19 @@ def build_sdr_agent(
             metrics.conversion_rate,
             metrics.engagement_rate,
         )
+
+        observation = (
+            f"Pipeline: {metrics.total_leads} leads, "
+            f"{metrics.contacted} contacted, {metrics.engaged} engaged, "
+            f"{metrics.qualified} qualified, {metrics.meetings_booked}/{meeting_target} meetings. "
+            f"Conversion: {metrics.conversion_rate:.1%}, "
+            f"Engagement: {metrics.engagement_rate:.1%}."
+        )
+
         return StateSnapshot(
             timestamp=time.time(),
             values=values,
+            observation=observation,
             metadata={
                 "meetings": metrics.meetings_booked,
                 "target": meeting_target,
@@ -137,12 +192,19 @@ def build_sdr_agent(
     freq_checker = ContactFrequencyChecker(leads)
     limit_checker = DailyLimitChecker(metrics)
 
-    # Target: meetings booked / target ratio, engagement rate
-    target_values = (1.0, 0.5)  # 100% meeting target, 50% engagement
+    model = _get_model()
 
     app, initial_state = (
         GraphBuilder("sales-sdr")
-        .with_objective(target_values)
+        .with_model(model)
+        .with_goal(
+            f"Book {meeting_target} meetings from the sales pipeline",
+            criteria=[
+                f"Meeting booking rate >= {meeting_target}/{meeting_target}",
+                "Pipeline engagement rate > 50%",
+                "Respect daily contact limits and frequency constraints",
+            ],
+        )
         .with_evaluator(evaluator)
         .with_planner(planner)
         .with_constraint_checkers(freq_checker, limit_checker)

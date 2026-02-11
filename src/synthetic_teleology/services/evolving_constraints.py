@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -74,6 +75,7 @@ class EvolvingConstraintManager:
         self._violation_history: list[dict[str, Any]] = []
         self._evolution_history: list[EvolutionResult] = []
         self._round_counter = 0
+        self._lock = threading.Lock()
 
     @property
     def constraints(self) -> list[str]:
@@ -94,11 +96,12 @@ class EvolvingConstraintManager:
         self, violations: list[str], context: dict[str, Any] | None = None,
     ) -> None:
         """Record constraint violations for analysis."""
-        self._violation_history.append({
-            "violations": violations,
-            "context": context or {},
-            "timestamp": time.time(),
-        })
+        with self._lock:
+            self._violation_history.append({
+                "violations": violations,
+                "context": context or {},
+                "timestamp": time.time(),
+            })
 
     def should_evolve(self) -> bool:
         """Check if it's time for constraint evolution."""
@@ -120,12 +123,13 @@ class EvolvingConstraintManager:
         EvolutionResult or None
             The evolution result if evolution was triggered, else None.
         """
-        self._round_counter += 1
+        with self._lock:
+            self._round_counter += 1
 
-        if not self.should_evolve():
-            return None
+            if not self.should_evolve():
+                return None
 
-        return self.evolve(agent_results)
+            return self._evolve_locked(agent_results)
 
     def evolve(self, agent_results: dict[str, Any] | None = None) -> EvolutionResult:
         """Run LLM-based constraint evolution analysis.
@@ -140,6 +144,11 @@ class EvolvingConstraintManager:
         EvolutionResult
             Proposed constraint evolutions.
         """
+        with self._lock:
+            return self._evolve_locked(agent_results)
+
+    def _evolve_locked(self, agent_results: dict[str, Any] | None = None) -> EvolutionResult:
+        """Internal evolve — must be called with self._lock held."""
         violation_summary = self._summarize_violations()
         current = "\n".join(f"- {c}" for c in self._constraints) if self._constraints else "None"
 

@@ -3,8 +3,6 @@
 These functions determine routing between nodes based on the current state.
 """
 
-from __future__ import annotations
-
 from typing import Any, Literal
 
 
@@ -21,16 +19,15 @@ def should_continue(state: dict[str, Any]) -> Literal["perceive", "__end__"]:
 def should_revise(state: dict[str, Any]) -> Literal["revise", "check_constraints"]:
     """After evaluate, decide whether to attempt goal revision.
 
-    If the evaluation signal magnitude is high (strongly positive or
-    strongly negative) it may warrant revision.  A moderate score
-    skips revision and proceeds directly to constraint checking.
+    Revise when the evaluation signal indicates poor performance
+    (score <= -0.3). Good scores indicate the agent is on track and
+    skip revision.
     """
     signal = state.get("eval_signal")
     if signal is None:
         return "check_constraints"
 
     score = signal.score
-    # Revise if the score indicates significant under- or over-performance
-    if abs(score) >= 0.5 or score <= -0.3:
+    if score <= -0.3:
         return "revise"
     return "check_constraints"

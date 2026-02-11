@@ -8,6 +8,10 @@ Re-exports public environment types for convenient top-level access::
         ResourceEnvironment,
         ResearchEnvironment,
         SharedEnvironment,
+        EnvironmentWrapper,
+        NoisyObservationWrapper,
+        HistoryTrackingWrapper,
+        ResourceQuotaWrapper,
     )
 """
 
@@ -16,6 +20,12 @@ from synthetic_teleology.environments.numeric import NumericEnvironment
 from synthetic_teleology.environments.research import ResearchEnvironment
 from synthetic_teleology.environments.resource import ResourceEnvironment
 from synthetic_teleology.environments.shared import SharedEnvironment
+from synthetic_teleology.environments.wrappers import (
+    EnvironmentWrapper,
+    HistoryTrackingWrapper,
+    NoisyObservationWrapper,
+    ResourceQuotaWrapper,
+)
 
 __all__ = [
     "BaseEnvironment",
@@ -23,4 +33,8 @@ __all__ = [
     "ResourceEnvironment",
     "ResearchEnvironment",
     "SharedEnvironment",
+    "EnvironmentWrapper",
+    "NoisyObservationWrapper",
+    "HistoryTrackingWrapper",
+    "ResourceQuotaWrapper",
 ]

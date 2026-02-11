@@ -11,6 +11,8 @@ directly.
 
 from __future__ import annotations
 
+import dataclasses
+import threading
 from collections.abc import Iterator, Sequence
 
 from .entities import Constraint, Goal
@@ -33,6 +35,7 @@ class GoalTree:
         self._root = root
         self._children: dict[str, list[Goal]] = {root.goal_id: []}
         self._all_goals: dict[str, Goal] = {root.goal_id: root}
+        self._lock = threading.Lock()
 
     # -- properties -----------------------------------------------------------
 
@@ -53,12 +56,13 @@ class GoalTree:
 
         Raises ``KeyError`` if the parent does not exist in the tree.
         """
-        if parent_id not in self._all_goals:
-            raise KeyError(f"Parent goal {parent_id!r} not found in tree")
-        child.parent_id = parent_id
-        self._children.setdefault(parent_id, []).append(child)
-        self._children.setdefault(child.goal_id, [])
-        self._all_goals[child.goal_id] = child
+        with self._lock:
+            if parent_id not in self._all_goals:
+                raise KeyError(f"Parent goal {parent_id!r} not found in tree")
+            child = dataclasses.replace(child, parent_id=parent_id)
+            self._children.setdefault(parent_id, []).append(child)
+            self._children.setdefault(child.goal_id, [])
+            self._all_goals[child.goal_id] = child
 
     def remove_subgoal(self, goal_id: str) -> None:
         """Remove *goal_id* and its entire subtree from the tree.
@@ -66,21 +70,22 @@ class GoalTree:
         Raises ``ValueError`` if attempting to remove the root, or
         ``KeyError`` if the goal is not found.
         """
-        if goal_id == self._root.goal_id:
-            raise ValueError("Cannot remove root goal")
-        goal = self._all_goals.get(goal_id)
-        if goal is None:
-            raise KeyError(f"Goal {goal_id!r} not found in tree")
-        # Detach from parent's children list
-        if goal.parent_id and goal.parent_id in self._children:
-            self._children[goal.parent_id] = [
-                g for g in self._children[goal.parent_id]
-                if g.goal_id != goal_id
-            ]
-        # Remove the whole subtree
-        for child_id in self._get_subtree_ids(goal_id):
-            self._all_goals.pop(child_id, None)
-            self._children.pop(child_id, None)
+        with self._lock:
+            if goal_id == self._root.goal_id:
+                raise ValueError("Cannot remove root goal")
+            goal = self._all_goals.get(goal_id)
+            if goal is None:
+                raise KeyError(f"Goal {goal_id!r} not found in tree")
+            # Detach from parent's children list
+            if goal.parent_id and goal.parent_id in self._children:
+                self._children[goal.parent_id] = [
+                    g for g in self._children[goal.parent_id]
+                    if g.goal_id != goal_id
+                ]
+            # Remove the whole subtree
+            for child_id in self._get_subtree_ids(goal_id):
+                self._all_goals.pop(child_id, None)
+                self._children.pop(child_id, None)
 
     # -- queries --------------------------------------------------------------
 
@@ -169,6 +174,11 @@ class GoalTree:
         list[GoalRevision]
             All revision records produced by the propagation.
         """
+        with self._lock:
+            return self._propagate_revision_locked(revised_goal)
+
+    def _propagate_revision_locked(self, revised_goal: Goal) -> list[GoalRevision]:
+        """Internal propagation — must be called with self._lock held."""
         revisions: list[GoalRevision] = []
         children = self._children.get(revised_goal.goal_id, [])
         for idx, child in enumerate(list(children)):
@@ -184,6 +194,7 @@ class GoalTree:
 
             # Update internal maps
             self._all_goals[new_child.goal_id] = new_child
+            self._all_goals.pop(child.goal_id, None)
             self._children[revised_goal.goal_id][idx] = new_child
             self._children[new_child.goal_id] = self._children.pop(
                 child.goal_id, []
@@ -191,7 +202,7 @@ class GoalTree:
             revisions.append(revision)
 
             # Recurse into the new child's subtree
-            revisions.extend(self.propagate_revision(new_child))
+            revisions.extend(self._propagate_revision_locked(new_child))
 
         return revisions
 

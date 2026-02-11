@@ -79,7 +79,8 @@ class TestThresholdUpdater:
         with pytest.raises(ValueError, match="learning_rate must be in"):
             ThresholdUpdater(learning_rate=0.0)
 
-    def test_original_goal_marked_revised(self) -> None:
+    def test_original_goal_unchanged_after_revision(self) -> None:
+        """Goal is frozen — original stays ACTIVE after revise()."""
         updater = ThresholdUpdater(threshold=0.3, learning_rate=0.1)
         obj = ObjectiveVector(values=(5.0,), directions=(Direction.APPROACH,))
         goal = Goal(name="g", objective=obj)
@@ -89,7 +90,9 @@ class TestThresholdUpdater:
         result = updater.update(goal, state, signal)
         assert result is not None
         from synthetic_teleology.domain.enums import GoalStatus
-        assert goal.status == GoalStatus.REVISED
+        # Frozen: original goal is unchanged
+        assert goal.status == GoalStatus.ACTIVE
+        assert result.status == GoalStatus.ACTIVE
 
 
 class TestGradientUpdater:

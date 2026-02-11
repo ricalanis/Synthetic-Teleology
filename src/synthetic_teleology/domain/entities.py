@@ -7,6 +7,7 @@ mutable lifecycle.  ``Goal`` is versioned and tracks its own status transitions.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -19,18 +20,22 @@ from .values import ConstraintSpec, EvalSignal, GoalProvenance, GoalRevision, Ob
 # Goal entity
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclass(frozen=True)
 class Goal:
-    """A goal entity -- has identity (``goal_id``), is versioned, and carries
-    mutable status.
+    """An immutable goal entity -- has identity (``goal_id``) and is versioned.
 
     Goals form a directed acyclic graph via ``parent_id``.  Revisions produce
-    a *new* ``Goal`` instance with an incremented ``version`` while the
-    original is marked ``GoalStatus.REVISED``.
+    a *new* ``Goal`` instance with an incremented ``version``; the original
+    goal is left unchanged (immutability per Haidemariam 2026: G_t -> G_{t+1}
+    produces a NEW goal entity).
 
     In LLM mode, the primary goal representation is ``description`` (natural
     language) with optional ``success_criteria``.  The ``objective`` vector is
     optional and used for numeric evaluation when available.
+
+    Note: ``metadata`` is a dict (mutable contents). With ``frozen=True``,
+    the dict reference can't be reassigned but its contents can still be
+    mutated. This is intentional — same as PyTorch's frozen dataclass patterns.
     """
 
     goal_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -56,15 +61,10 @@ class Goal:
         *,
         new_description: str | None = None,
         new_criteria: list[str] | None = None,
-    ) -> tuple[Goal, GoalRevision]:
+    ) -> tuple["Goal", GoalRevision]:
         """Create a revised successor goal and a ``GoalRevision`` record.
 
-        **Intentional mutation**: This method mutates the *current* goal by
-        setting ``self.status = GoalStatus.REVISED``.  This is by design —
-        once revised, the original goal is no longer active.  The new goal
-        returned as the first element of the tuple is the active successor.
-
-        The *current* goal is marked ``GoalStatus.REVISED``; the returned goal
+        The original goal is left unchanged (immutable). The returned goal
         inherits name, description, parent, and metadata but gets a fresh id,
         incremented version, and the supplied changes.
 
@@ -107,29 +107,28 @@ class Goal:
             reason=reason,
             eval_signal=eval_signal,
         )
-        self.status = GoalStatus.REVISED
         return new_goal, revision
 
-    def achieve(self) -> None:
-        """Mark goal as achieved."""
-        self.status = GoalStatus.ACHIEVED
+    def achieve(self) -> "Goal":
+        """Return a new Goal with ACHIEVED status."""
+        return dataclasses.replace(self, status=GoalStatus.ACHIEVED)
 
-    def abandon(self) -> None:
-        """Mark goal as abandoned."""
-        self.status = GoalStatus.ABANDONED
+    def abandon(self) -> "Goal":
+        """Return a new Goal with ABANDONED status."""
+        return dataclasses.replace(self, status=GoalStatus.ABANDONED)
 
-    def suspend(self) -> None:
-        """Mark goal as suspended (can be reactivated later)."""
-        self.status = GoalStatus.SUSPENDED
+    def suspend(self) -> "Goal":
+        """Return a new Goal with SUSPENDED status."""
+        return dataclasses.replace(self, status=GoalStatus.SUSPENDED)
 
-    def reactivate(self) -> None:
-        """Reactivate a suspended goal."""
+    def reactivate(self) -> "Goal":
+        """Return a new Goal reactivated from SUSPENDED status."""
         if self.status != GoalStatus.SUSPENDED:
             raise ValueError(
                 f"Only suspended goals can be reactivated, "
                 f"current status is {self.status.value}"
             )
-        self.status = GoalStatus.ACTIVE
+        return dataclasses.replace(self, status=GoalStatus.ACTIVE)
 
     # -- queries --------------------------------------------------------------
 

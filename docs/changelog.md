@@ -2,6 +2,134 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [1.5.0] — 2026-02-11
+
+### Senior Review Fix — 12 Issues Resolved
+
+Addresses 12 issues from a senior architecture review, focusing on correctness, immutability, thread safety, and test coverage. All changes are paper-aligned per Haidemariam (2026).
+
+#### Phase 1: Quick Wins (5 issues)
+- **Removed `from __future__ import annotations`** from 4 graph files (`nodes.py`, `graph.py`, `builder.py`, `edges.py`) — fixes LangGraph TypedDict resolution
+- **Revision threshold fix**: changed from `abs(score) >= 0.5 or score <= -0.3` to `score <= -0.3` only — good scores no longer trigger revision
+- **GoalTree memory leak fix**: `propagate_revision()` now removes old child from `_all_goals` dict
+- **Softmax division-by-zero fix**: `_softmax()` and `LLMPlanner.__init__()` validate `temperature > 0`
+- **Empty violations fix**: `LLMConstraintChecker` now falls back to overall reasoning when individual violations list is empty but `overall_safe=False`
+
+#### Phase 2: Goal Immutability (2 issues)
+- **Goal is now `@dataclass(frozen=True)`** — paper alignment: G_t → G_{t+1} produces NEW entity
+- Lifecycle methods (`achieve`, `abandon`, `suspend`, `reactivate`) return new `Goal` via `dataclasses.replace()`
+- `revise()` no longer mutates `self.status = REVISED` — old goal is simply replaced
+- Updated all callers: `reflect_node`, `loop.py`, `goal_grounding.py`, `GoalTree.add_subgoal`
+- Updated all tests asserting on mutation behavior
+
+#### Phase 3: Thread Safety (1 issue)
+- **`threading.Lock()`** added to 4 mutable shared-state classes:
+  - `BudgetChecker` — `record_cost()`, `reset()`
+  - `EvolvingConstraintManager` — `record_violations()`, `step()`, `evolve()`
+  - `IntentionalGroundingManager` — `add_directive()`, `ground()`
+  - `GoalTree` — `add_subgoal()`, `remove_subgoal()`, `propagate_revision()`
+- Recursive calls use internal `_locked` methods to avoid deadlock
+
+#### Phase 4: LLM Service Improvements (2 issues)
+- **Class-level `ThreadPoolExecutor`** in all 4 LLM services (was per-call)
+- Added `shutdown()` method to `LLMEvaluator`, `LLMPlanner`, `LLMReviser`, `LLMConstraintChecker`, `LLMNegotiator`
+- **Timeout support for `LLMNegotiator`** — `_invoke_with_timeout()` method, replaces 3 direct `model.invoke()` calls
+
+#### Phase 5: Test Coverage (1 issue)
+- **`PromptCapturingMock`** — records all prompts sent to LLM for test assertion
+- **`test_prompt_contents.py`** — 4 tests verifying prompt content (evaluator, planner, reviser, enriched observation)
+- **`test_revision_e2e.py`** — end-to-end test: graph executes revision path and populates `goal_history`
+
+#### Phase 6: Examples (2 issues)
+- **Example 13 rewritten** — uses `build_multi_agent_graph()` with `AgentConfig` list, `negotiation_model` for LLM negotiation, `WorkingMemory` per agent
+- **Sales SDR converted to LLM mode** — `.with_objective()` → `.with_model()` + `.with_goal()`, custom evaluator/planner override LLM defaults, `MockStructuredChatModel` for simulated mode
+
+#### Phase 7: Docs + Version Bump
+- `docs/decisions.md` — 4 new decisions (Goal immutability, revision threshold, thread safety, class-level executor)
+- `docs/changelog.md` — this entry
+- `docs/known_issues.md` — 12 issues logged
+- Version bump: `1.4.0` → `1.5.0`
+
+#### New Files (3)
+- `src/.../testing/mock_llm.py` — `PromptCapturingMock` class added
+- `tests/graph/test_prompt_contents.py` — 4 tests
+- `tests/graph/test_revision_e2e.py` — 1 test
+
+#### New Test Files (5)
+- `tests/test_v150_phase1.py` — 8 tests (GoalTree leak, softmax, temperature, empty violations)
+- `tests/test_v150_phase2.py` — 9 tests (frozen Goal, lifecycle, reflect_node)
+- `tests/test_v150_phase3.py` — 4 tests (concurrent safety)
+- `tests/graph/test_prompt_contents.py` — 4 tests
+- `tests/graph/test_revision_e2e.py` — 1 test
+
+#### Stats
+- **741 tests** (713 + 28 new), all passing
+- Lint clean on all changed files
+- Version: `1.5.0`
+
+---
+
+## [1.4.0] — 2026-02-11
+
+### Production-Grade Refinements
+
+Focuses on positioning, environment layer maturity, and memory safety. Design philosophy: "Like PyTorch — academic in spirit, production grade."
+
+#### Phase 1: BDI → Intentional State Mapping
+- **Rename**: `BDIAgent` → `IntentionalStateAgent`, `bdi_bridge.py` → `intentional_bridge.py`
+- All factory functions renamed: `make_bdi_*_node` → `make_intentional_*_node`, `build_bdi_teleological_graph` → `build_intentional_teleological_graph`
+- Event types renamed: `bdi_goal_revised` → `intentional_goal_revised`, etc.
+- `GraphBuilder.with_intentional_agent()` replaces `.with_bdi_agent()` (deprecated alias kept)
+- `AgentConfig.intentional_agent` replaces `.bdi_agent`
+- **Backward-compat shims**: old files re-export new names — zero breaking changes
+
+#### Phase 2: Environment Layer — PyTorch-Style Features
+- **`state_dict()` / `load_state_dict()`** on `BaseEnvironment` (PyTorch-style serialization)
+  - `_state_dict_impl()` / `_load_state_dict_impl()` hooks implemented on all 4 environments
+  - Round-trip serialization: save → modify → restore verified for Numeric, Resource, Research, Shared
+- **`EnvironmentWrapper`** base class (Decorator pattern, like `gym.Wrapper`)
+  - `NoisyObservationWrapper(env, noise_std)` — Gaussian noise on `observe()`
+  - `HistoryTrackingWrapper(env, max_history)` — bounded `(action, snapshot)` recording
+  - `ResourceQuotaWrapper(env, quotas, strict)` — per-resource usage caps
+  - Composable stacking + `unwrapped` property
+
+#### Phase 3: Bounded Accumulation Channels
+- `_make_bounded_add(max_size)` — reducer factory capping append-only channels
+- `make_bounded_state(max_history)` — creates `BoundedTeleologicalState` TypedDict
+- `GraphBuilder.with_max_history(n)` — builder integration
+- `build_teleological_graph(state_schema=...)` — accepts custom state schema
+- Default behavior unchanged (unbounded `TeleologicalState`)
+
+#### Phase 4: README + CLAUDE.md
+- **README.md** — full rewrite to descriptive style (no version numbers in features, grouped by capability domain, "Design Philosophy" section)
+- **CLAUDE.md** — project root rules file (documentation style, code conventions, architecture)
+
+#### Phase 5: Docs + Verification
+- `docs/decisions.md` — renamed BDI sections → ISM, added 4 new decisions
+- `docs/changelog.md` — this entry
+- Version bump: `1.3.0` → `1.4.0`
+
+#### New Files (6)
+- `src/.../agents/intentional.py`
+- `src/.../graph/intentional_bridge.py`
+- `src/.../environments/wrappers.py`
+- `tests/graph/test_intentional_bridge.py`
+- `tests/environments/test_state_dict.py`
+- `tests/environments/test_wrappers.py`
+
+#### New Test Files (4)
+- `tests/graph/test_intentional_bridge.py` — 18 tests
+- `tests/environments/test_state_dict.py` — 8 tests
+- `tests/environments/test_wrappers.py` — 17 tests
+- `tests/graph/test_bounded_state.py` — 10 tests
+
+#### Stats
+- **~709 tests** (656 + 53 new), all passing
+- Lint clean on all changed files
+- Version: `1.4.0`
+
+---
+
 ## [1.3.0] — 2026-02-11
 
 ### Senior Review Gap Closure — 8 Architectural Improvements

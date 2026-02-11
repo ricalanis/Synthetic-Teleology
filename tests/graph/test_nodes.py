@@ -167,7 +167,7 @@ class TestReflectNode:
         assert result["stop_reason"] == "empty_policy"
 
     def test_stop_on_abandoned_goal(self, initial_state: dict) -> None:
-        initial_state["goal"].abandon()
+        initial_state["goal"] = initial_state["goal"].abandon()
         initial_state["step"] = 5
         initial_state["eval_signal"] = EvalSignal(score=0.3, confidence=0.8)
         result = reflect_node(initial_state)

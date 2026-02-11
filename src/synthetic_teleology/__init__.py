@@ -5,7 +5,7 @@ LangGraph toolkit for goal-directed agents implementing Haidemariam (2026)
 the theory of Synthetic Teleology in Agentic AI.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.5.0"
 
 from synthetic_teleology.graph import (
     GraphBuilder,

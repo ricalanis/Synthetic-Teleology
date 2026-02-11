@@ -11,6 +11,7 @@ graph and service layers cleanly.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 from dataclasses import dataclass, field
@@ -68,10 +69,28 @@ class LLMNegotiator:
         model: Any,
         max_dialogue_rounds: int = 3,
         temperature: float = 0.7,
+        timeout: float | None = None,
     ) -> None:
         self._model = model
         self._max_rounds = max_dialogue_rounds
         self._temperature = temperature
+        self._timeout = timeout
+        self._executor = (
+            concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            if timeout is not None else None
+        )
+
+    def _invoke_with_timeout(self, prompt: str) -> Any:
+        """Invoke the model with optional timeout."""
+        if self._timeout is None:
+            return self._model.invoke(prompt)
+        future = self._executor.submit(self._model.invoke, prompt)
+        return future.result(timeout=self._timeout)
+
+    def shutdown(self) -> None:
+        """Shut down the internal thread pool executor."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False)
 
     def negotiate(
         self,
@@ -149,7 +168,7 @@ class LLMNegotiator:
             )
 
             try:
-                response = self._model.invoke(prompt)
+                response = self._invoke_with_timeout(prompt)
                 content = response.content if hasattr(response, "content") else str(response)
                 data = self._parse_json(content)
 
@@ -188,7 +207,7 @@ class LLMNegotiator:
         )
 
         try:
-            response = self._model.invoke(prompt)
+            response = self._invoke_with_timeout(prompt)
             content = response.content if hasattr(response, "content") else str(response)
             data = self._parse_json(content)
 
@@ -229,7 +248,7 @@ class LLMNegotiator:
         )
 
         try:
-            response = self._model.invoke(prompt)
+            response = self._invoke_with_timeout(prompt)
             content = response.content if hasattr(response, "content") else str(response)
             data = self._parse_json(content)
 

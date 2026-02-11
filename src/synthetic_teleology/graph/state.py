@@ -29,6 +29,111 @@ from synthetic_teleology.services.goal_revision import BaseGoalUpdater
 from synthetic_teleology.services.planning import BasePlanner
 
 
+def _make_bounded_add(max_size: int) -> Callable[[list, list], list]:
+    """Create a reducer that appends and keeps only the last ``max_size`` items.
+
+    Parameters
+    ----------
+    max_size:
+        Maximum number of items to retain.  When the combined list
+        exceeds this, the oldest entries (head) are dropped.
+
+    Returns
+    -------
+    Callable
+        A reducer compatible with ``Annotated[list, reducer]``.
+    """
+
+    def bounded_add(current: list, new: list) -> list:
+        combined = current + new
+        if len(combined) > max_size:
+            return combined[-max_size:]
+        return combined
+
+    return bounded_add
+
+
+def make_bounded_state(max_history: int = 500) -> type:
+    """Create a ``BoundedTeleologicalState`` TypedDict with capped accumulation channels.
+
+    All append-only channels (``events``, ``eval_history``, ``action_history``,
+    ``reasoning_trace``, ``action_feedback``, ``goal_history``) are bounded
+    to at most ``max_history`` entries each.
+
+    Parameters
+    ----------
+    max_history:
+        Maximum entries per accumulation channel.
+
+    Returns
+    -------
+    type
+        A TypedDict subclass with bounded reducers.
+    """
+    bounded = _make_bounded_add(max_history)
+
+    class BoundedTeleologicalState(TypedDict, total=False):
+        """TeleologicalState with bounded accumulation channels."""
+
+        # -- Loop control
+        step: int
+        max_steps: int
+        goal_achieved_threshold: float
+        stop_reason: str
+
+        # -- Core teleological state
+        goal: Goal
+        observation: str
+        state_snapshot: StateSnapshot
+        eval_signal: EvalSignal
+        hypotheses: list[Hypothesis]
+        selected_plan: Hypothesis | None
+        policy: PolicySpec
+        filtered_policy: PolicySpec
+        executed_action: ActionSpec | None
+
+        # -- Constraints
+        constraints_ok: bool
+        constraint_violations: list[str]
+        constraint_assessments: list[dict]
+
+        # -- Injected strategies
+        evaluator: BaseEvaluator
+        goal_updater: BaseGoalUpdater
+        planner: BasePlanner
+        constraint_pipeline: ConstraintPipeline
+        policy_filter: PolicyFilter
+
+        # -- LLM configuration
+        model: Any
+        tools: list[Any]
+        num_hypotheses: int
+
+        # -- Environment callables
+        perceive_fn: Callable
+        act_fn: Callable | None
+        transition_fn: Callable | None
+
+        # -- Bounded accumulation channels
+        events: Annotated[list, bounded]
+        goal_history: Annotated[list, bounded]
+        eval_history: Annotated[list, bounded]
+        action_history: Annotated[list, bounded]
+        reasoning_trace: Annotated[list, bounded]
+        action_feedback: Annotated[list, bounded]
+
+        # -- Optional integrations
+        knowledge_store: Any
+        audit_trail: Any
+        grounding_manager: Any
+        evolving_constraint_manager: Any
+
+        # -- Extensibility
+        metadata: dict[str, Any]
+
+    return BoundedTeleologicalState
+
+
 class TeleologicalState(TypedDict, total=False):
     """State flowing through the teleological LangGraph.
 

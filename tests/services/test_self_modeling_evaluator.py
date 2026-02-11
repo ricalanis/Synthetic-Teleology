@@ -266,9 +266,10 @@ class TestActiveInferenceUpdater:
         result = updater.update(goal, snap, signal2)
 
         if result is not None:
-            # The original goal should now be REVISED status
+            # Goal is frozen — original stays ACTIVE
             from synthetic_teleology.domain.enums import GoalStatus
-            assert goal.status == GoalStatus.REVISED
+            assert goal.status == GoalStatus.ACTIVE
+            assert result.status == GoalStatus.ACTIVE
 
     def test_epistemic_component_uses_dimension_scores(self) -> None:
         updater = ActiveInferenceUpdater(

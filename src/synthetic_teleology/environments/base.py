@@ -130,6 +130,52 @@ class BaseEnvironment(ABC):
         """
         ...
 
+    # -- state serialization (PyTorch-style) --------------------------------
+
+    def state_dict(self) -> dict[str, Any]:
+        """Serialize environment state (like ``torch.nn.Module.state_dict()``).
+
+        Returns a dictionary containing the full environment state that
+        can later be restored via :meth:`load_state_dict`.
+
+        Returns
+        -------
+        dict[str, Any]
+            Serialized state dictionary.
+        """
+        base: dict[str, Any] = {
+            "env_id": self._env_id,
+            "step_count": self._step_count,
+            "perturbation_history": list(self._perturbation_history),
+        }
+        base.update(self._state_dict_impl())
+        return base
+
+    def load_state_dict(self, state: dict[str, Any]) -> None:
+        """Restore state from a dictionary (like ``torch.nn.Module.load_state_dict()``).
+
+        Parameters
+        ----------
+        state:
+            Dictionary previously returned by :meth:`state_dict`.
+        """
+        self._step_count = state.get("step_count", 0)
+        self._perturbation_history = list(state.get("perturbation_history", []))
+        self._load_state_dict_impl(state)
+
+    def _state_dict_impl(self) -> dict[str, Any]:
+        """Subclass hook for serializing internal state.
+
+        Override this to add environment-specific fields to the state dict.
+        """
+        return {}
+
+    def _load_state_dict_impl(self, state: dict[str, Any]) -> None:
+        """Subclass hook for restoring internal state.
+
+        Override this to restore environment-specific fields from the state dict.
+        """
+
     # -- perturbation injection ---------------------------------------------
 
     def inject_perturbation(self, perturbation: dict[str, Any]) -> None:

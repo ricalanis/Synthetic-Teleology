@@ -1,5 +1,31 @@
 # Known Issues
 
+## 2026-02-11: 12 Senior Review Issues Fixed in v1.5.0
+
+The following 12 issues were identified in a senior architecture review and resolved:
+
+1. **`from __future__ import annotations` in graph files** — broke LangGraph TypedDict resolution. Fixed: removed from `nodes.py`, `graph.py`, `builder.py`, `edges.py`. Forward references in `builder.py` quoted as `-> "GraphBuilder":`.
+2. **Goal mutation breaking functional node contracts** — `Goal` was mutable, lifecycle methods mutated in-place. Fixed: `@dataclass(frozen=True)`, all lifecycle methods return new instances via `dataclasses.replace()`.
+3. **`revise()` side-effect** — set `self.status = REVISED` on the original goal. Fixed: removed the side-effect. Old goal stays `ACTIVE`, new goal is independent.
+4. **Thread safety on shared mutable state** — `BudgetChecker`, `EvolvingConstraintManager`, `IntentionalGroundingManager`, `GoalTree` had unprotected mutable state. Fixed: `threading.Lock()` on all four.
+5. **GoalTree memory leak** — `propagate_revision()` added new children but never removed old ones from `_all_goals`. Fixed: `self._all_goals.pop(child.goal_id, None)`.
+6. **Revision threshold triggered on good scores** — `abs(score) >= 0.5` meant scores like 0.8 triggered revision. Fixed: only `score <= -0.3` triggers revision.
+7. **Per-call ThreadPoolExecutor** — LLM services created a new executor per `invoke` with timeout. Fixed: class-level executor in `__init__`, plus `shutdown()` method.
+8. **Softmax division by zero** — `_softmax(values, temperature=0)` caused division by zero. Fixed: validation in `_softmax()` and `LLMPlanner.__init__()`.
+9. **Empty constraint violations** — `LLMConstraintChecker` could return `overall_safe=False` with empty violations list. Fixed: fallback to overall reasoning text.
+10. **No prompt content tests** — LLM services weren't verified to include goal/criteria in prompts. Fixed: `PromptCapturingMock` + `test_prompt_contents.py`.
+11. **Example 13 not using multi-agent API** — ran agents independently, no negotiation. Fixed: rewritten with `build_multi_agent_graph()`, `AgentConfig`, `negotiation_model`.
+12. **Sales SDR in numeric mode** — used `.with_objective()` instead of LLM mode. Fixed: converted to `.with_model()` + `.with_goal()` with custom evaluator/planner overrides.
+
+## 2026-02-11: Removing `from __future__ import annotations` from builder.py breaks forward references
+
+- **What happened:** After removing the import, `-> GraphBuilder:` return type annotations caused `NameError` at class definition time.
+- **Root cause:** Without `from __future__ import annotations`, forward references to the class being defined need to be quoted strings.
+- **Fix:** Changed all `-> GraphBuilder:` to `-> "GraphBuilder":` with `replace_all=true`.
+- **How to avoid:** When removing `from __future__ import annotations`, check for self-referencing return types and quote them.
+
+---
+
 ## 2026-02-10: Editable install .pth file not processed by uv venv
 
 - **What happened:** After `uv pip install -e .`, the generated `_synthetic_teleology.pth` file exists in site-packages with correct content (`/path/to/src`), but Python does not add the path to `sys.path`. Tests fail with `ModuleNotFoundError`.

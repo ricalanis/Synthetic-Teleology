@@ -9,8 +9,6 @@ capture hypothesis metadata.  In numeric mode, nodes behave identically to
 v0.2.x for backward compatibility.
 """
 
-from __future__ import annotations
-
 import logging
 import time
 from typing import Any
@@ -718,7 +716,7 @@ def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
     elif goal.status == GoalStatus.ABANDONED:
         stop_reason = "goal_abandoned"
     elif signal.score >= threshold:
-        goal.achieve()
+        goal = goal.achieve()
         stop_reason = "goal_achieved"
     elif filtered_policy is not None and filtered_policy.size == 0:
         stop_reason = "empty_policy"
@@ -731,7 +729,7 @@ def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
         "timestamp": time.time(),
     }
 
-    result: dict[str, Any] = {"events": [event]}
+    result: dict[str, Any] = {"events": [event], "goal": goal}
     if stop_reason is not None:
         result["stop_reason"] = stop_reason
 

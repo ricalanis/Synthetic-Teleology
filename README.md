@@ -1,6 +1,6 @@
 # Synthetic Teleology
 
-LangGraph implementation of Haidemariam (2026) **Synthetic Teleology** for building goal-directed AI agents with recursive self-evaluation.
+LangGraph toolkit for building goal-directed AI agents with recursive self-evaluation.
 
 ## What is Synthetic Teleology?
 
@@ -27,25 +27,48 @@ The framework grounds agent design in four **pillars of agency**: Intentionality
 
 > Haidemariam, Y. A. (2026). From the logic of coordination to goal-directed reasoning: Synthetic teleology in agentic AI. *Frontiers in Artificial Intelligence*, 9, 1592432.
 
+## Design Philosophy
+
+Academic in spirit, production grade. Synthetic Teleology bridges formal theory (Haidemariam, 2026) with composable Python abstractions following PyTorch conventions: `state_dict()`/`load_state_dict()` for environment checkpointing, `EnvironmentWrapper` for composable decorators, closure-based strategy injection for LangGraph compatibility, and a fluent `GraphBuilder` API for zero-boilerplate agent construction.
+
 ## Features
 
-- **LLM-powered evaluation, planning, revision, and constraint checking** — structured output via Pydantic schemas
+### Goal-Directed Reasoning
+
+- **LLM-powered evaluation, planning, revision, and constraint checking** with structured output via Pydantic schemas
 - **Multi-hypothesis planning** with softmax selection over confidence scores
 - **Soft constraint reasoning** with severity scores and suggested mitigations
 - **Goal revision** with provenance tracking and audit trail
-- **Multi-agent coordination** with negotiation protocols (propose → critique → synthesize)
-- **Parallel agent execution** via LangGraph Send API
-- **8 teleological metrics** — 7 from the paper + ReasoningQuality for LLM traces
-- **Dual-mode architecture** — LLM reasoning or numeric computation, auto-detected by the builder
-- **Self-contained examples** — all run without API keys using built-in mock models
 - **Active inference** via expected free energy decomposition
 - **Self-modeling evaluation** with surprise detection and confidence adjustment
-- **Evolving constraints** and distributed intentional grounding
-- **BDI bridge** — classical Belief-Desire-Intention mapping to LangGraph nodes
-- **LangGraph checkpointing support** — strategies injected via closures, not stored in state
+
+### Environments and State Management
+
+- **Four built-in environments** — numeric (continuous), resource (scarcity), research (knowledge synthesis), shared (multi-agent)
+- **PyTorch-style serialization** — `state_dict()` / `load_state_dict()` on all environments
+- **Composable wrappers** — `EnvironmentWrapper` base class plus `NoisyObservationWrapper`, `HistoryTrackingWrapper`, `ResourceQuotaWrapper`
+- **Bounded accumulation channels** — configurable history caps to prevent memory bloat
+
+### Multi-Agent Coordination
+
+- **Negotiation protocols** — propose, critique, synthesize dialogue
+- **Parallel agent execution** via LangGraph Send API
+- **Shared environments** with per-agent local state partitions
+
+### Measurement
+
+- **Eight teleological metrics** — Goal Persistence, Teleological Coherence, Reflective Efficiency, Adaptivity, Normative Fidelity, Innovation Yield, Lyapunov Stability, Reasoning Quality
+- **Metrics engine** with collector, reports, and benchmark suites
+- **Distribution shift, conflicting objectives, and negotiation benchmarks** with configurable parameters
+
+### Production Features
+
+- **LangGraph checkpointing** — strategies injected via closures, not stored in state
 - **Configurable timeouts** on all LLM services with fail-safe error handling
-- **Constraint severity model** — opt-in `ConstraintResult` with severity scores and mitigations
-- **Co-evolutionary constraint wiring** — `EvolvingConstraintManager` integrated into the graph loop
+- **Fail-closed constraint checking** — constraint errors block rather than pass
+- **Intentional State Mapping** — belief/desire/intention architecture mapped to LangGraph nodes
+- **Evolving constraints** and distributed intentional grounding wired into the graph loop
+- **Dual-mode architecture** — LLM reasoning or numeric computation, auto-detected by the builder
 
 ## Architecture
 
@@ -63,6 +86,9 @@ The framework grounds agent design in four **pillars of agency**: Intentionality
 ├──────────────────────────────────────────────────────────────────┤
 │                    NUMERIC STRATEGY SERVICES                      │
 │  NumericEvaluator, GreedyPlanner, ThresholdUpdater, etc.         │
+├──────────────────────────────────────────────────────────────────┤
+│                    ENVIRONMENTS                                    │
+│  Numeric, Resource, Research, Shared + Wrappers + state_dict()   │
 ├──────────────────────────────────────────────────────────────────┤
 │                    MEASUREMENT                                    │
 │  8 Metrics, MetricsEngine, Benchmarks, Reports                   │
@@ -195,7 +221,7 @@ All examples are self-contained and run without API keys using built-in mock mod
 | 06 | `conceptual/06_planning_strategies.py` | GreedyPlanner, StochasticPlanner, HierarchicalPlanner decomposition |
 | 07 | `conceptual/07_hierarchical_goals.py` | GoalTree, coherence validation, revision propagation, HierarchicalUpdater |
 | 08 | `conceptual/08_environments.py` | ResourceEnvironment (scarcity), ResearchEnvironment (knowledge synthesis) |
-| 09 | `conceptual/09_metrics_measurement.py` | All 7 teleological metrics, MetricsEngine, AgentLog, MetricsReport |
+| 09 | `conceptual/09_metrics_measurement.py` | All teleological metrics, MetricsEngine, AgentLog, MetricsReport |
 | 10 | `conceptual/10_ethical_constraints.py` | EthicalChecker predicates, ConstraintPipeline (fail_fast), PolicyFilter |
 | 11 | `conceptual/11_llm_quickstart.py` | LLM agent with natural language goals, multi-hypothesis planning |
 | 12 | `conceptual/12_llm_tools.py` | LLM agent with LangChain tools for actions |
@@ -221,7 +247,7 @@ Both agents run in simulated mode by default. Pass `--live` to use real APIs (re
 
 ## Metrics
 
-The framework implements 8 teleological metrics (7 from the paper + ReasoningQuality):
+The framework implements eight teleological metrics:
 
 | Metric | Abbreviation | Measures |
 |--------|-------------|----------|
@@ -234,14 +260,6 @@ The framework implements 8 teleological metrics (7 from the paper + ReasoningQua
 | Lyapunov Stability | LS | Score variance convergence over time |
 | Reasoning Quality | RQ | Coherence and diversity of LLM reasoning traces |
 
-## Testing
-
-```bash
-PYTHONPATH=src .venv/bin/python -m pytest tests/ -v
-```
-
-**656 tests** covering all modules.
-
 ## Dual-Mode Architecture
 
 The framework supports two modes detected automatically by the builder:
@@ -251,18 +269,27 @@ The framework supports two modes detected automatically by the builder:
 | **LLM Mode** | `.with_model(model)` | LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker | Yes |
 | **Numeric Mode** | `.with_objective(values)` | NumericEvaluator, GreedyPlanner, ThresholdUpdater | No |
 
+## Testing
+
+```bash
+PYTHONPATH=src .venv/bin/python -m pytest tests/ -v
+```
+
+Comprehensive test suite covering all modules.
+
 ## Package Structure
 
 ```
 src/synthetic_teleology/
 ├── graph/               # LangGraph teleological loop
-│   ├── state.py         # TeleologicalState TypedDict
-│   ├── nodes.py         # 8 node functions (LLM + numeric dual-mode)
+│   ├── state.py         # TeleologicalState TypedDict + bounded variants
+│   ├── nodes.py         # Node functions (LLM + numeric dual-mode)
 │   ├── edges.py         # Conditional routing
 │   ├── graph.py         # build_teleological_graph()
 │   ├── builder.py       # GraphBuilder fluent API
 │   ├── prebuilt.py      # create_llm_agent(), create_numeric_agent()
 │   ├── multi_agent.py   # Multi-agent coordination
+│   ├── intentional_bridge.py  # Intentional State Mapping → LangGraph
 │   └── streaming.py     # Stream event formatters
 ├── services/
 │   ├── llm_evaluation.py   # LLMEvaluator (structured output)
@@ -274,10 +301,10 @@ src/synthetic_teleology/
 │   ├── goal_revision.py    # ThresholdUpdater, GradientUpdater, etc.
 │   └── constraint_engine.py # ConstraintPipeline, PolicyFilter
 ├── domain/              # Goal (text + vector), EvalSignal, Hypothesis, events
-├── environments/        # Numeric, resource, research, shared environments
-├── measurement/         # Collector, 8 metrics, engine, reports, benchmarks
+├── environments/        # Numeric, resource, research, shared + wrappers
+├── measurement/         # Collector, metrics, engine, reports, benchmarks
 ├── infrastructure/      # EventBus, registry, config, LangChain bridge
-├── agents/              # Base, teleological, BDI, LLM agents + factory
+├── agents/              # Base, teleological, intentional-state, LLM + factory
 ├── presentation/        # Console dashboard, plots, export
 └── cli.py               # Command-line interface
 ```

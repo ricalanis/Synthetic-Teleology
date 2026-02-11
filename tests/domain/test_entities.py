@@ -35,8 +35,9 @@ class TestGoal:
         new_obj = sample_objective.with_values((6.0, 6.0))
         new_goal, revision = goal.revise(new_obj, reason="test-revision")
 
-        assert goal.status == GoalStatus.REVISED
-        assert goal.is_terminal is True
+        # Goal is frozen — original is unchanged
+        assert goal.status == GoalStatus.ACTIVE
+        assert goal.is_terminal is False
         assert new_goal.status == GoalStatus.ACTIVE
         assert new_goal.version == goal.version + 1
         assert new_goal.objective == new_obj
@@ -53,28 +54,31 @@ class TestGoal:
         assert revision.eval_signal is signal
 
     def test_achieve(self) -> None:
-        goal = Goal(name="g1")
-        goal.achieve()
-        assert goal.status == GoalStatus.ACHIEVED
-        assert goal.is_terminal is True
-        assert goal.is_active is False
+        original = Goal(name="g1")
+        achieved = original.achieve()
+        assert achieved.status == GoalStatus.ACHIEVED
+        assert achieved.is_terminal is True
+        assert achieved.is_active is False
+        # Original is unchanged (frozen)
+        assert original.status == GoalStatus.ACTIVE
 
     def test_abandon(self) -> None:
-        goal = Goal(name="g1")
-        goal.abandon()
-        assert goal.status == GoalStatus.ABANDONED
-        assert goal.is_terminal is True
+        original = Goal(name="g1")
+        abandoned = original.abandon()
+        assert abandoned.status == GoalStatus.ABANDONED
+        assert abandoned.is_terminal is True
+        assert original.status == GoalStatus.ACTIVE
 
     def test_suspend_and_reactivate(self) -> None:
-        goal = Goal(name="g1")
-        goal.suspend()
-        assert goal.status == GoalStatus.SUSPENDED
-        assert goal.is_active is False
-        assert goal.is_terminal is False
+        original = Goal(name="g1")
+        suspended = original.suspend()
+        assert suspended.status == GoalStatus.SUSPENDED
+        assert suspended.is_active is False
+        assert suspended.is_terminal is False
 
-        goal.reactivate()
-        assert goal.status == GoalStatus.ACTIVE
-        assert goal.is_active is True
+        reactivated = suspended.reactivate()
+        assert reactivated.status == GoalStatus.ACTIVE
+        assert reactivated.is_active is True
 
     def test_reactivate_non_suspended_raises(self) -> None:
         goal = Goal(name="g1")

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synthetic-teleology"
-version = "1.3.0"
+version = "1.5.0"
 description = "LLM-first LangGraph toolkit for goal-directed agents implementing Synthetic Teleology (Haidemariam, 2026)"
 readme = "README.md"
 license = "MIT"

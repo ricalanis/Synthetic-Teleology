@@ -99,6 +99,10 @@ class LLMEvaluator(BaseEvaluator):
         self._prompt = prompt or _EVALUATION_PROMPT
         self._timeout = timeout
         self._chain = self._build_chain()
+        self._executor = (
+            concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            if timeout is not None else None
+        )
 
     def _build_chain(self) -> Any:
         """Build the evaluation chain with structured output."""
@@ -109,9 +113,13 @@ class LLMEvaluator(BaseEvaluator):
         """Invoke the chain with optional timeout."""
         if self._timeout is None:
             return self._chain.invoke(inputs)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(self._chain.invoke, inputs)
-            return future.result(timeout=self._timeout)
+        future = self._executor.submit(self._chain.invoke, inputs)
+        return future.result(timeout=self._timeout)
+
+    def shutdown(self) -> None:
+        """Shut down the internal thread pool executor."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False)
 
     def validate(self, goal: Goal, state: StateSnapshot) -> bool:
         """LLM evaluator can handle any goal with a description."""

@@ -5,8 +5,6 @@ into a compiled LangGraph that implements the full Perceive-Evaluate-
 Revise-Plan-Filter-Act-Reflect loop.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -42,6 +40,7 @@ def build_teleological_graph(
     constraint_pipeline: Any | None = None,
     policy_filter: Any | None = None,
     enable_evolving_constraints: bool = False,
+    state_schema: type | None = None,
 ) -> Any:
     """Build and compile the teleological StateGraph.
 
@@ -68,13 +67,18 @@ def build_teleological_graph(
         Optional policy filter instance (closure injection).
     enable_evolving_constraints:
         If True, wire an ``evolve_constraints`` node after check_constraints.
+    state_schema:
+        Optional state TypedDict to use instead of the default
+        ``TeleologicalState``.  Pass a bounded variant (from
+        ``make_bounded_state()``) to cap accumulation channels.
 
     Returns
     -------
     CompiledStateGraph
         A compiled graph ready for ``.invoke()`` or ``.stream()``.
     """
-    graph = StateGraph(TeleologicalState)
+    schema = state_schema if state_schema is not None else TeleologicalState
+    graph = StateGraph(schema)
 
     # Use closure-based nodes when strategies are provided as kwargs,
     # otherwise fall back to module-level functions that read from state.

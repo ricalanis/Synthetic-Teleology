@@ -10,8 +10,10 @@ sources and uses an LLM to assess their influence on the current goal.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -73,6 +75,7 @@ class IntentionalGroundingManager:
         self._max_directives = max_directives
         self._directives: list[ExternalDirective] = []
         self._grounding_history: list[dict[str, Any]] = []
+        self._lock = threading.Lock()
 
     @property
     def directives(self) -> list[ExternalDirective]:
@@ -89,9 +92,10 @@ class IntentionalGroundingManager:
 
         If the directive limit is reached, oldest directives are removed.
         """
-        self._directives.append(directive)
-        if len(self._directives) > self._max_directives:
-            self._directives = self._directives[-self._max_directives:]
+        with self._lock:
+            self._directives.append(directive)
+            if len(self._directives) > self._max_directives:
+                self._directives = self._directives[-self._max_directives:]
 
     def add_user_directive(self, content: str, priority: float = 0.8) -> None:
         """Convenience: add a user directive."""
@@ -132,12 +136,13 @@ class IntentionalGroundingManager:
         Goal or None
             A new grounded goal, or None if no grounding needed.
         """
-        if not self._directives:
-            return None
+        with self._lock:
+            if not self._directives:
+                return None
 
-        if self._model is not None:
-            return self._llm_ground(goal, eval_signal)
-        return self._rule_based_ground(goal, eval_signal)
+            if self._model is not None:
+                return self._llm_ground(goal, eval_signal)
+            return self._rule_based_ground(goal, eval_signal)
 
     def _llm_ground(self, goal: Goal, eval_signal: EvalSignal | None) -> Goal | None:
         """LLM-based grounding assessment."""
@@ -190,10 +195,13 @@ class IntentionalGroundingManager:
                 new_description=adjusted_desc,
                 reason="grounding",
             )
-            # Attach provenance to the new goal
-            new_goal.provenance = GoalProvenance(
-                origin=GoalOrigin.ENDOGENOUS,
-                source_description="Intentional grounding from external directives",
+            # Attach provenance to the new goal (frozen — use replace)
+            new_goal = dataclasses.replace(
+                new_goal,
+                provenance=GoalProvenance(
+                    origin=GoalOrigin.ENDOGENOUS,
+                    source_description="Intentional grounding from external directives",
+                ),
             )
             return new_goal
 
@@ -231,9 +239,12 @@ class IntentionalGroundingManager:
             new_description=adjusted_desc,
             reason="grounding",
         )
-        new_goal.provenance = GoalProvenance(
-            origin=GoalOrigin.ENDOGENOUS,
-            source_description="Rule-based intentional grounding",
+        new_goal = dataclasses.replace(
+            new_goal,
+            provenance=GoalProvenance(
+                origin=GoalOrigin.ENDOGENOUS,
+                source_description="Rule-based intentional grounding",
+            ),
         )
         return new_goal
 

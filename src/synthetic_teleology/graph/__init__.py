@@ -31,6 +31,12 @@ from synthetic_teleology.graph.bdi_bridge import (
 from synthetic_teleology.graph.builder import GraphBuilder
 from synthetic_teleology.graph.edges import should_continue, should_revise
 from synthetic_teleology.graph.graph import build_teleological_graph
+from synthetic_teleology.graph.intentional_bridge import (
+    build_intentional_teleological_graph,
+    make_intentional_perceive_node,
+    make_intentional_plan_node,
+    make_intentional_revise_node,
+)
 from synthetic_teleology.graph.multi_agent import AgentConfig, build_multi_agent_graph
 from synthetic_teleology.graph.nodes import (
     act_node,
@@ -79,7 +85,12 @@ __all__ = [
     "filter_policy_node",
     "act_node",
     "reflect_node",
-    # BDI Bridge
+    # Intentional State Mapping
+    "build_intentional_teleological_graph",
+    "make_intentional_perceive_node",
+    "make_intentional_revise_node",
+    "make_intentional_plan_node",
+    # Intentional State Mapping (deprecated BDI aliases)
     "build_bdi_teleological_graph",
     "make_bdi_perceive_node",
     "make_bdi_revise_node",

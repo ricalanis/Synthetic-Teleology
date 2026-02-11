@@ -376,6 +376,29 @@ class SharedEnvironment(BaseEnvironment):
             metadata={"step": 0, "reset": True, "num_agents": self.num_agents},
         )
 
+    # -- state serialization -------------------------------------------------
+
+    def _state_dict_impl(self) -> dict[str, Any]:
+        return {
+            "global_state": list(float(v) for v in self._global_state),
+            "local_states": {
+                agent_id: list(float(v) for v in arr)
+                for agent_id, arr in self._local_states.items()
+            },
+            "registered_agents": sorted(self._registered_agents),
+        }
+
+    def _load_state_dict_impl(self, state: dict[str, Any]) -> None:
+        if "global_state" in state:
+            self._global_state = np.array(state["global_state"], dtype=np.float64)
+        if "local_states" in state:
+            self._local_states = {
+                agent_id: np.array(vals, dtype=np.float64)
+                for agent_id, vals in state["local_states"].items()
+            }
+        if "registered_agents" in state:
+            self._registered_agents = set(state["registered_agents"])
+
     # -- perturbation -------------------------------------------------------
 
     def _apply_perturbation(self, perturbation: dict[str, Any]) -> None:

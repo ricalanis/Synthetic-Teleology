@@ -221,6 +221,21 @@ class NumericEnvironment(BaseEnvironment):
             metadata={"step": 0, "reset": True},
         )
 
+    # -- state serialization -------------------------------------------------
+
+    def _state_dict_impl(self) -> dict[str, Any]:
+        return {
+            "state": list(float(v) for v in self._state),
+            "dimensions": self._dimensions,
+            "noise_std": self._noise_std,
+        }
+
+    def _load_state_dict_impl(self, state: dict[str, Any]) -> None:
+        if "state" in state:
+            self._state = np.array(state["state"], dtype=np.float64)
+        if "noise_std" in state:
+            self._noise_std = float(state["noise_std"])
+
     # -- perturbation -------------------------------------------------------
 
     def _apply_perturbation(self, perturbation: dict[str, Any]) -> None:

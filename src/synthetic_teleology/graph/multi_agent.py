@@ -55,7 +55,7 @@ class AgentConfig:
     transition_fn: Callable | None = None
     act_fn: Callable | None = None
     max_steps_per_round: int = 10
-    bdi_agent: Any = None
+    intentional_agent: Any = None
 
 
 class MultiAgentState(TypedDict, total=False):
