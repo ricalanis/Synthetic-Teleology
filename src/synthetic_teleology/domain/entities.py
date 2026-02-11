@@ -59,6 +59,11 @@ class Goal:
     ) -> tuple[Goal, GoalRevision]:
         """Create a revised successor goal and a ``GoalRevision`` record.
 
+        **Intentional mutation**: This method mutates the *current* goal by
+        setting ``self.status = GoalStatus.REVISED``.  This is by design —
+        once revised, the original goal is no longer active.  The new goal
+        returned as the first element of the tuple is the active successor.
+
         The *current* goal is marked ``GoalStatus.REVISED``; the returned goal
         inherits name, description, parent, and metadata but gets a fresh id,
         incremented version, and the supplied changes.

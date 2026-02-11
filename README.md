@@ -42,6 +42,10 @@ The framework grounds agent design in four **pillars of agency**: Intentionality
 - **Self-modeling evaluation** with surprise detection and confidence adjustment
 - **Evolving constraints** and distributed intentional grounding
 - **BDI bridge** — classical Belief-Desire-Intention mapping to LangGraph nodes
+- **LangGraph checkpointing support** — strategies injected via closures, not stored in state
+- **Configurable timeouts** on all LLM services with fail-safe error handling
+- **Constraint severity model** — opt-in `ConstraintResult` with severity scores and mitigations
+- **Co-evolutionary constraint wiring** — `EvolvingConstraintManager` integrated into the graph loop
 
 ## Architecture
 
@@ -236,7 +240,7 @@ The framework implements 8 teleological metrics (7 from the paper + ReasoningQua
 PYTHONPATH=src .venv/bin/python -m pytest tests/ -v
 ```
 
-**636 tests** covering all modules.
+**656 tests** covering all modules.
 
 ## Dual-Mode Architecture
 

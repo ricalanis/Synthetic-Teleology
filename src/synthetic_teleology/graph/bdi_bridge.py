@@ -249,6 +249,9 @@ def build_bdi_teleological_graph(
     checkpointer: Any = None,
     interrupt_before: list[str] | None = None,
     interrupt_after: list[str] | None = None,
+    evaluator: Any = None,
+    constraint_pipeline: Any = None,
+    policy_filter: Any = None,
 ) -> Any:
     """Build a LangGraph with BDI-augmented nodes.
 
@@ -266,6 +269,12 @@ def build_bdi_teleological_graph(
         Nodes to interrupt before (human-in-the-loop).
     interrupt_after:
         Nodes to interrupt after.
+    evaluator:
+        Optional evaluator for closure injection (enables checkpointing).
+    constraint_pipeline:
+        Optional constraint pipeline for closure injection.
+    policy_filter:
+        Optional policy filter for closure injection.
 
     Returns
     -------
@@ -280,19 +289,34 @@ def build_bdi_teleological_graph(
         check_constraints_node,
         evaluate_node,
         filter_policy_node,
+        make_check_constraints_node,
+        make_evaluate_node,
+        make_filter_policy_node,
         reflect_node,
     )
     from synthetic_teleology.graph.state import TeleologicalState
+
+    eval_fn = make_evaluate_node(evaluator) if evaluator is not None else evaluate_node
+    constraints_fn = (
+        make_check_constraints_node(constraint_pipeline)
+        if constraint_pipeline is not None
+        else check_constraints_node
+    )
+    filter_fn = (
+        make_filter_policy_node(policy_filter)
+        if policy_filter is not None
+        else filter_policy_node
+    )
 
     graph = StateGraph(TeleologicalState)
 
     # Use BDI-augmented nodes for perceive, revise, plan
     graph.add_node("perceive", make_bdi_perceive_node(bdi_agent))
-    graph.add_node("evaluate", evaluate_node)
+    graph.add_node("evaluate", eval_fn)
     graph.add_node("revise", make_bdi_revise_node(bdi_agent))
-    graph.add_node("check_constraints", check_constraints_node)
+    graph.add_node("check_constraints", constraints_fn)
     graph.add_node("plan", make_bdi_plan_node(bdi_agent))
-    graph.add_node("filter_policy", filter_policy_node)
+    graph.add_node("filter_policy", filter_fn)
     graph.add_node("act", act_node)
     graph.add_node("reflect", reflect_node)
 

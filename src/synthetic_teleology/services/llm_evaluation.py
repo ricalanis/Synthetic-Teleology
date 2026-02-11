@@ -7,6 +7,7 @@ assessment into an ``EvalSignal``.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from typing import Any
 
@@ -91,16 +92,26 @@ class LLMEvaluator(BaseEvaluator):
         model: BaseChatModel,
         criteria: list[str] | None = None,
         prompt: ChatPromptTemplate | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.model = model
         self.criteria = criteria or []
         self._prompt = prompt or _EVALUATION_PROMPT
+        self._timeout = timeout
         self._chain = self._build_chain()
 
     def _build_chain(self) -> Any:
         """Build the evaluation chain with structured output."""
         structured_model = self.model.with_structured_output(EvaluationOutput)
         return self._prompt | structured_model
+
+    def _invoke_with_timeout(self, inputs: dict[str, Any]) -> Any:
+        """Invoke the chain with optional timeout."""
+        if self._timeout is None:
+            return self._chain.invoke(inputs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._chain.invoke, inputs)
+            return future.result(timeout=self._timeout)
 
     def validate(self, goal: Goal, state: StateSnapshot) -> bool:
         """LLM evaluator can handle any goal with a description."""
@@ -121,7 +132,7 @@ class LLMEvaluator(BaseEvaluator):
         )
 
         try:
-            result: EvaluationOutput = self._chain.invoke(
+            result: EvaluationOutput = self._invoke_with_timeout(
                 {
                     "goal_name": goal.name or goal.goal_id,
                     "goal_description": goal.description or str(goal.objective),
@@ -148,6 +159,7 @@ class LLMEvaluator(BaseEvaluator):
             logger.warning("LLMEvaluator: evaluation failed: %s", exc)
             return EvalSignal(
                 score=0.0,
-                confidence=0.1,
+                confidence=0.0,
                 explanation=f"LLMEvaluator: error: {exc}",
+                metadata={"llm_error": True, "error_type": type(exc).__name__, "error": str(exc)},
             )

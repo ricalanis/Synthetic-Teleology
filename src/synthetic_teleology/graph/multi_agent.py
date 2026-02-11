@@ -166,17 +166,18 @@ def _run_numeric_agent(
             objective=shared_objective,
         )
 
-    sub_app = build_teleological_graph()
-    sub_state = {
+    sub_app = build_teleological_graph(
+        evaluator=state.get("evaluator"),
+        goal_updater=state.get("goal_updater"),
+        planner=state.get("planner"),
+        constraint_pipeline=state.get("constraint_pipeline"),
+        policy_filter=state.get("policy_filter"),
+    )
+    sub_state: dict[str, Any] = {
         "step": 0,
         "max_steps": config.max_steps_per_round,
         "goal_achieved_threshold": state.get("goal_achieved_threshold", 0.9),
         "goal": agent_goal,
-        "evaluator": state["evaluator"],
-        "goal_updater": state["goal_updater"],
-        "planner": state["planner"],
-        "constraint_pipeline": state["constraint_pipeline"],
-        "policy_filter": state["policy_filter"],
         "perceive_fn": config.perceive_fn,
         "act_fn": config.act_fn,
         "transition_fn": config.transition_fn,

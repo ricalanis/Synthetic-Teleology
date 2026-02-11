@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.graph.builder import GraphBuilder
-from synthetic_teleology.services.llm_evaluation import EvaluationOutput, LLMEvaluator
-from synthetic_teleology.services.llm_planning import LLMPlanner
+from synthetic_teleology.services.llm_evaluation import EvaluationOutput
 from tests.helpers.mock_llm import MockStructuredChatModel
 
 
@@ -40,8 +39,9 @@ class TestGraphBuilderLLMMode:
         assert state["goal"].success_criteria == ["Revenue > $120k"]
         assert state["max_steps"] == 20
         assert state["model"] is not None
-        assert isinstance(state["evaluator"], LLMEvaluator)
-        assert isinstance(state["planner"], LLMPlanner)
+        # Strategies are now injected via closures, not stored in state
+        assert "evaluator" not in state
+        assert "planner" not in state
 
     def test_build_llm_mode_with_tools(self) -> None:
         class MockTool:
@@ -67,7 +67,8 @@ class TestGraphBuilderLLMMode:
             .build()
         )
 
-        assert state["constraint_pipeline"] is not None
+        # Constraint pipeline injected via closure, not in state
+        assert app is not None
 
     def test_build_llm_mode_defaults(self) -> None:
         app, state = (
@@ -107,7 +108,9 @@ class TestGraphBuilderLLMMode:
             .build()
         )
 
-        assert state["evaluator"] is custom
+        # Strategies injected via closures; not in state
+        assert app is not None
+        assert "evaluator" not in state
 
     def test_build_llm_mode_with_environment(self) -> None:
         def perceive():

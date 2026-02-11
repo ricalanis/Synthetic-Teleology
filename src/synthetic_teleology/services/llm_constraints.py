@@ -6,6 +6,7 @@ with nuance, severity scores, and suggested mitigations.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from typing import Any
 
@@ -105,16 +106,26 @@ class LLMConstraintChecker(BaseConstraintChecker):
         model: BaseChatModel,
         constraints: list[str],
         prompt: ChatPromptTemplate | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.model = model
         self.constraints = constraints
         self._prompt = prompt or _CONSTRAINT_PROMPT
+        self._timeout = timeout
         self._chain = self._build_chain()
 
     def _build_chain(self) -> Any:
         """Build the constraint checking chain."""
         structured_model = self.model.with_structured_output(ConstraintCheckOutput)
         return self._prompt | structured_model
+
+    def _invoke_with_timeout(self, inputs: dict[str, Any]) -> Any:
+        """Invoke the chain with optional timeout."""
+        if self._timeout is None:
+            return self._chain.invoke(inputs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._chain.invoke, inputs)
+            return future.result(timeout=self._timeout)
 
     def check(
         self,
@@ -139,7 +150,7 @@ class LLMConstraintChecker(BaseConstraintChecker):
             )
 
         try:
-            result: ConstraintCheckOutput = self._chain.invoke(
+            result: ConstraintCheckOutput = self._invoke_with_timeout(
                 {
                     "constraints_list": "\n".join(
                         f"{i + 1}. {c}" for i, c in enumerate(self.constraints)
@@ -171,8 +182,8 @@ class LLMConstraintChecker(BaseConstraintChecker):
 
         except Exception as exc:
             logger.warning("LLMConstraintChecker: check failed: %s", exc)
-            # On error, fail open (assume safe) to avoid blocking the agent
-            return True, ""
+            # Fail closed — reject on error to maintain safety
+            return False, f"LLMConstraintChecker: constraint check failed: {exc}"
 
     def check_detailed(
         self,
@@ -197,7 +208,7 @@ class LLMConstraintChecker(BaseConstraintChecker):
             )
 
         try:
-            return self._chain.invoke(
+            return self._invoke_with_timeout(
                 {
                     "constraints_list": "\n".join(
                         f"{i + 1}. {c}" for i, c in enumerate(self.constraints)

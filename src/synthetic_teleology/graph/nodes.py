@@ -20,6 +20,46 @@ from synthetic_teleology.domain.values import EvalSignal, StateSnapshot
 logger = logging.getLogger(__name__)
 
 
+def evolve_constraints_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Evolve constraints based on violation history.
+
+    Reads ``evolving_constraint_manager`` and ``constraint_violations`` from state.
+    Records violations, calls ``manager.step()``, and returns evolution reasoning.
+    """
+    manager = state.get("evolving_constraint_manager")
+    if manager is None:
+        return {}
+
+    violations = state.get("constraint_violations", [])
+    if violations:
+        try:
+            manager.record_violations(violations)
+        except Exception as exc:
+            logger.warning("evolve_constraints_node: record_violations failed: %s", exc)
+
+    try:
+        result = manager.step()
+    except Exception as exc:
+        logger.warning("evolve_constraints_node: step failed: %s", exc)
+        return {}
+
+    if result is None:
+        return {}
+
+    import time as _time
+
+    trace: dict[str, Any] = {
+        "node": "evolve_constraints",
+        "step": state.get("step", 0),
+        "reasoning": result.reasoning,
+        "new_constraints": result.new_constraints,
+        "removed_constraints": result.removed_constraints,
+        "timestamp": _time.time(),
+    }
+
+    return {"reasoning_trace": [trace]}
+
+
 def _build_enriched_observation(base_observation: str, state: dict[str, Any]) -> str:
     """Append action results, eval trends, and goal revision count to the observation.
 
@@ -58,11 +98,220 @@ def _build_enriched_observation(base_observation: str, state: dict[str, Any]) ->
         n = len(goal_history)
         parts.append(f"{n} goal revision(s) so far")
 
+    # Knowledge store entries (best-effort)
+    knowledge_store = state.get("knowledge_store")
+    if knowledge_store is not None:
+        try:
+            recent_entries = knowledge_store.query_recent(max_age_seconds=300)
+            if recent_entries:
+                lines = [f"  - {e.key}: {e.value}" for e in recent_entries[-5:]]
+                parts.append("Knowledge store:\n" + "\n".join(lines))
+        except Exception:
+            pass  # best-effort
+
     if not parts:
         return base_observation
 
     enrichment = "\n\n".join(parts)
     return f"{base_observation}\n\n--- History ---\n{enrichment}"
+
+
+# ---------------------------------------------------------------------------
+# Factory functions for closure-based strategy injection
+# ---------------------------------------------------------------------------
+# When strategies are passed as kwargs to build_teleological_graph(), these
+# factories create node functions that capture strategies via closure instead
+# of reading them from state.  This enables LangGraph checkpointing since
+# non-serializable objects are no longer stored in state.
+
+
+def make_evaluate_node(evaluator: Any) -> Any:
+    """Create an evaluate node that uses a closure-captured evaluator."""
+
+    def _evaluate(state: dict[str, Any]) -> dict[str, Any]:
+        goal = state["goal"]
+        snapshot = state["state_snapshot"]
+
+        if evaluator.validate(goal, snapshot):
+            signal = evaluator.evaluate(goal, snapshot)
+        else:
+            signal = EvalSignal(
+                score=0.0,
+                confidence=0.0,
+                explanation="Evaluator validation failed",
+            )
+
+        logger.debug(
+            "evaluate_node(closure): score=%.4f conf=%.4f", signal.score, signal.confidence
+        )
+
+        import time as _time
+
+        event = {
+            "type": "evaluation_completed",
+            "step": state.get("step", 0),
+            "score": signal.score,
+            "confidence": signal.confidence,
+            "timestamp": _time.time(),
+        }
+
+        result: dict[str, Any] = {
+            "eval_signal": signal,
+            "eval_history": [signal],
+            "events": [event],
+        }
+
+        if signal.reasoning:
+            result["reasoning_trace"] = [
+                {
+                    "node": "evaluate",
+                    "step": state.get("step", 0),
+                    "reasoning": signal.reasoning,
+                    "timestamp": _time.time(),
+                }
+            ]
+
+        return result
+
+    return _evaluate
+
+
+def make_revise_node(updater: Any) -> Any:
+    """Create a revise node that uses a closure-captured goal updater."""
+
+    def _revise(state: dict[str, Any]) -> dict[str, Any]:
+        goal = state["goal"]
+        snapshot = state["state_snapshot"]
+        signal = state["eval_signal"]
+
+        revised = updater.update(goal, snapshot, signal)
+
+        if revised is not None:
+            logger.info(
+                "revise_node(closure): goal revised %s -> %s",
+                goal.goal_id,
+                revised.goal_id,
+            )
+            import time as _time
+
+            event = {
+                "type": "goal_revised",
+                "step": state.get("step", 0),
+                "previous_goal_id": goal.goal_id,
+                "new_goal_id": revised.goal_id,
+                "timestamp": _time.time(),
+            }
+            result: dict[str, Any] = {
+                "goal": revised,
+                "goal_history": [revised],
+                "events": [event],
+            }
+
+            if hasattr(revised, "metadata") and revised.metadata.get("revision_reasoning"):
+                result["reasoning_trace"] = [
+                    {
+                        "node": "revise",
+                        "step": state.get("step", 0),
+                        "reasoning": revised.metadata["revision_reasoning"],
+                        "timestamp": _time.time(),
+                    }
+                ]
+
+            audit_trail = state.get("audit_trail")
+            if audit_trail is not None:
+                try:
+                    audit_trail.record(
+                        goal_id=revised.goal_id,
+                        previous_goal_id=goal.goal_id,
+                        revision_reason=event.get("type", ""),
+                        eval_score=signal.score,
+                        eval_confidence=signal.confidence,
+                        provenance=getattr(revised, "provenance", None),
+                    )
+                except Exception as exc:
+                    logger.warning("revise_node(closure): audit trail record failed: %s", exc)
+
+            return result
+
+        return {}
+
+    return _revise
+
+
+def make_check_constraints_node(pipeline: Any) -> Any:
+    """Create a check_constraints node that uses a closure-captured pipeline."""
+
+    def _check_constraints(state: dict[str, Any]) -> dict[str, Any]:
+        goal = state["goal"]
+        snapshot = state["state_snapshot"]
+
+        ok, violations = pipeline.check_all(goal, snapshot)
+
+        if not ok:
+            logger.warning("check_constraints_node(closure): violations=%s", violations)
+
+        return {
+            "constraints_ok": ok,
+            "constraint_violations": violations,
+        }
+
+    return _check_constraints
+
+
+def make_plan_node(planner: Any) -> Any:
+    """Create a plan node that uses a closure-captured planner."""
+
+    def _plan(state: dict[str, Any]) -> dict[str, Any]:
+        goal = state["goal"]
+        snapshot = state["state_snapshot"]
+
+        policy = planner.plan(goal, snapshot)
+        logger.debug("plan_node(closure): planned %d actions", policy.size)
+
+        import time as _time
+
+        event = {
+            "type": "plan_generated",
+            "step": state.get("step", 0),
+            "num_actions": policy.size,
+            "timestamp": _time.time(),
+        }
+
+        result: dict[str, Any] = {
+            "policy": policy,
+            "events": [event],
+        }
+
+        hypotheses_data = policy.metadata.get("hypotheses") if policy.metadata else None
+        if hypotheses_data:
+            result["reasoning_trace"] = [
+                {
+                    "node": "plan",
+                    "step": state.get("step", 0),
+                    "num_hypotheses": len(hypotheses_data),
+                    "reasoning": policy.metadata.get("selection_reasoning", ""),
+                    "timestamp": _time.time(),
+                }
+            ]
+
+        return result
+
+    return _plan
+
+
+def make_filter_policy_node(policy_filter: Any) -> Any:
+    """Create a filter_policy node that uses a closure-captured policy filter."""
+
+    def _filter_policy(state: dict[str, Any]) -> dict[str, Any]:
+        policy = state["policy"]
+        goal = state["goal"]
+        snapshot = state["state_snapshot"]
+
+        filtered = policy_filter.filter(policy, goal, snapshot)
+        logger.debug("filter_policy_node(closure): %d -> %d actions", policy.size, filtered.size)
+        return {"filtered_policy": filtered}
+
+    return _filter_policy
 
 
 def perceive_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -496,5 +745,22 @@ def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
             "timestamp": time.time(),
         }
     ]
+
+    # Write reflection data to knowledge store (best-effort)
+    knowledge_store = state.get("knowledge_store")
+    if knowledge_store is not None:
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            knowledge_store.put(
+                key=f"reflection_step_{step}",
+                value={
+                    "eval_score": signal.score,
+                    "stop_reason": stop_reason,
+                    "goal_id": goal.goal_id,
+                },
+                source="reflect_node",
+                tags=("reflection",),
+            )
 
     return result

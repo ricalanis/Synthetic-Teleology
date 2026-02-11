@@ -2,6 +2,76 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [1.3.0] — 2026-02-11
+
+### Senior Review Gap Closure — 8 Architectural Improvements
+
+Addresses 8 of 10 gaps identified in the senior architecture review. Two gaps (agent API consolidation and streaming-first design) are documented as future work.
+
+#### Phase 1: LLM Error Handling + Timeout
+- **LLMEvaluator**: error fallback now sets `confidence=0.0` (was 0.1) with `metadata={"llm_error": True, "error_type": ..., "error": ...}`
+- **LLMPlanner**: error fallback returns a `noop_fallback` ActionSpec instead of empty PolicySpec (prevents agent freeze)
+- **LLMConstraintChecker**: **CRITICAL** — changed from fail-open to fail-closed on error (`return False, "error..."` instead of `return True, ""`)
+- **LLMReviser**: confirmed safe (already returns None on error)
+- All 4 LLM services: added `timeout: float | None` parameter with `concurrent.futures`-based timeout
+
+#### Phase 2: Strategy Closure Refactor (Checkpointing Support)
+- `build_teleological_graph()` accepts optional strategy kwargs (`evaluator`, `goal_updater`, `planner`, `constraint_pipeline`, `policy_filter`)
+- When provided, node functions capture strategies via closures instead of reading from state
+- `GraphBuilder` now passes strategies as kwargs — strategies no longer stored in `initial_state`
+- **Enables LangGraph checkpointing** (non-serializable objects removed from state)
+- Backward compatible: graphs built without kwargs still read strategies from state
+- Factory functions: `make_evaluate_node()`, `make_revise_node()`, `make_plan_node()`, `make_check_constraints_node()`, `make_filter_policy_node()`
+- Updated: `multi_agent.py`, `bdi_bridge.py` to use strategy kwargs
+
+#### Phase 3: Domain Refinements
+- **`ConstraintResult`** value object: `passed`, `message`, `severity`, `checker_name`, `suggested_mitigation`, `metadata`
+- **`BaseConstraintChecker.check_detailed()`**: returns `ConstraintResult` (default wraps `check()`)
+- **`ConstraintPipeline.check_all_detailed()`**: returns `list[ConstraintResult]` with per-checker detail
+- **`ActionSpec`**: added `effect: tuple[float, ...] | None` and `preconditions: Mapping[str, Any]` fields (backward compatible defaults)
+- **`Goal.revise()`**: documented intentional mutation behavior in docstring
+- **`BudgetChecker.reset()`**: added prominent docstring about reuse between runs
+
+#### Phase 4: Wire Dead Abstractions
+- **EvolvingConstraintManager**: wired into graph via `GraphBuilder.with_evolving_constraints(manager)`
+  - New `evolve_constraints_node`: records violations, calls `manager.step()`, emits reasoning trace
+  - `build_teleological_graph(enable_evolving_constraints=True)` wires node after check_constraints
+- **KnowledgeStore**: connected to observation enrichment and reflection
+  - `_build_enriched_observation()` queries `knowledge_store.query_recent()` and appends entries
+  - `reflect_node` writes reflection data (`eval_score`, `stop_reason`, `goal_id`) to knowledge store
+
+#### Files Changed
+- `services/llm_evaluation.py` — error metadata + timeout
+- `services/llm_planning.py` — noop fallback + timeout
+- `services/llm_revision.py` — timeout
+- `services/llm_constraints.py` — fail-closed + timeout
+- `graph/nodes.py` — factory functions + knowledge + evolving constraints node
+- `graph/graph.py` — strategy kwargs + evolving constraints wiring
+- `graph/builder.py` — pass strategies as kwargs + evolving constraints
+- `graph/state.py` — deprecation comments + evolving_constraint_manager field
+- `graph/multi_agent.py` — use strategy kwargs
+- `graph/bdi_bridge.py` — accept strategy kwargs
+- `domain/values.py` — ConstraintResult + ActionSpec fields
+- `domain/entities.py` — Goal.revise() docstring
+- `services/constraint_engine.py` — check_detailed() + check_all_detailed()
+
+#### New Test Files (4)
+- `tests/services/test_llm_error_handling.py` — 5 tests
+- `tests/graph/test_closure_strategies.py` — 3 tests
+- `tests/domain/test_constraint_result.py` — 7 tests
+- `tests/graph/test_integrations.py` — 5 tests
+
+#### Stats
+- **656 tests** (636 + 20 new), all passing
+- Lint clean on all changed files
+- Version: `1.3.0`
+
+#### Deferred
+- Agent API consolidation (class vs graph) — fundamental redesign affecting 40+ files
+- Streaming-first design — architecture change affecting all examples
+
+---
+
 ## [1.2.0] — 2026-02-11
 
 ### Agent Feedback Loop — Closes 3 Structural Gaps

@@ -6,6 +6,7 @@ feedback, and if so, proposes a new description and/or success criteria.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -108,15 +109,25 @@ class LLMReviser(BaseGoalUpdater):
         self,
         model: BaseChatModel,
         prompt: ChatPromptTemplate | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.model = model
         self._prompt = prompt or _REVISION_PROMPT
+        self._timeout = timeout
         self._chain = self._build_chain()
 
     def _build_chain(self) -> Any:
         """Build the revision chain with structured output."""
         structured_model = self.model.with_structured_output(RevisionOutput)
         return self._prompt | structured_model
+
+    def _invoke_with_timeout(self, inputs: dict[str, Any]) -> Any:
+        """Invoke the chain with optional timeout."""
+        if self._timeout is None:
+            return self._chain.invoke(inputs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._chain.invoke, inputs)
+            return future.result(timeout=self._timeout)
 
     def update(
         self,
@@ -134,7 +145,7 @@ class LLMReviser(BaseGoalUpdater):
         )
 
         try:
-            result: RevisionOutput = self._chain.invoke(
+            result: RevisionOutput = self._invoke_with_timeout(
                 {
                     "goal_name": goal.name or goal.goal_id,
                     "goal_description": goal.description or str(goal.objective),

@@ -29,7 +29,12 @@ from typing import TYPE_CHECKING, Any
 
 from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import ConstraintType
-from synthetic_teleology.domain.values import ActionSpec, PolicySpec, StateSnapshot
+from synthetic_teleology.domain.values import (
+    ActionSpec,
+    ConstraintResult,
+    PolicySpec,
+    StateSnapshot,
+)
 
 if TYPE_CHECKING:
     pass
@@ -90,6 +95,24 @@ class BaseConstraintChecker(ABC):
             ``(passed, violation_message)``. If ``passed`` is ``True``,
             the message is the empty string.
         """
+
+    def check_detailed(
+        self,
+        goal: Goal,
+        state: StateSnapshot,
+        action: ActionSpec | None = None,
+    ) -> ConstraintResult:
+        """Check a constraint and return a detailed ``ConstraintResult``.
+
+        Default implementation wraps ``check()`` for backward compatibility.
+        Subclasses may override for richer results (e.g. severity, mitigation).
+        """
+        passed, message = self.check(goal, state, action)
+        return ConstraintResult(
+            passed=passed,
+            message=message,
+            checker_name=getattr(self, "_name", type(self).__name__),
+        )
 
 
 # ===================================================================== #
@@ -223,7 +246,12 @@ class BudgetChecker(BaseConstraintChecker):
         self._spent += cost
 
     def reset(self) -> None:
-        """Reset the budget tracker."""
+        """Reset the budget tracker.
+
+        IMPORTANT: Call ``reset()`` between runs when reusing a BudgetChecker
+        instance across multiple graph invocations, otherwise the accumulated
+        cost from previous runs carries over.
+        """
         self._spent = 0.0
 
     def check(
@@ -414,6 +442,35 @@ class ConstraintPipeline:
         """
         passed, violations = self.check_all(goal, state, action)
         return passed, " | ".join(violations) if violations else ""
+
+    def check_all_detailed(
+        self,
+        goal: Goal,
+        state: StateSnapshot,
+        action: ActionSpec | None = None,
+    ) -> list[ConstraintResult]:
+        """Run all checkers and return detailed ``ConstraintResult`` objects.
+
+        Unlike ``check_all()`` which returns ``(bool, list[str])``, this
+        method provides per-checker ``ConstraintResult`` with severity,
+        checker name, and suggested mitigations.
+        """
+        results: list[ConstraintResult] = []
+        for checker in self._checkers:
+            try:
+                results.append(checker.check_detailed(goal, state, action))
+            except Exception as exc:
+                results.append(ConstraintResult(
+                    passed=False,
+                    message=f"{type(checker).__name__}: exception: {exc}",
+                    checker_name=getattr(checker, "_name", type(checker).__name__),
+                    severity=1.0,
+                ))
+                logger.exception(
+                    "ConstraintPipeline: check_detailed failed for %s",
+                    type(checker).__name__,
+                )
+        return results
 
 
 # ===================================================================== #

@@ -22,6 +22,11 @@
 - **Choice:** `GraphBuilder.build()` returns a `(CompiledStateGraph, dict)` tuple.
 - **Rationale:** The initial state contains injected strategies (evaluator, planner, etc.) as values in the dict. This is the cleanest way to pass non-serializable callables into the graph without global state.
 
+### Closure Injection Over State-Stored Strategies
+- **Context:** Strategies (evaluator, planner, etc.) stored as Python objects in state caused LangGraph checkpointing to fail with `TypeError: Type is not msgpack serializable`.
+- **Choice:** `build_teleological_graph()` accepts optional strategy kwargs. When provided, factory functions (`make_evaluate_node()`, etc.) create closure-wrapped node functions. Strategies are no longer stored in state.
+- **Rationale:** LangGraph checkpointers (MemorySaver, SqliteSaver) serialize state with msgpack. Non-serializable objects (class instances) must be kept out of state. Closures are the cleanest mechanism — strategies are captured at graph build time, invisible to the serialization layer. Backward compatible: when kwargs are absent, nodes read strategies from state as before.
+
 ### Dual-Mode Architecture (LLM + Numeric)
 - **Context:** Existing tests and examples depend on numeric mode. Breaking backward compatibility would be disruptive.
 - **Choice:** `GraphBuilder` detects mode automatically: `with_model()` → LLM mode (LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker), `with_objective()` → numeric mode (NumericEvaluator, GreedyPlanner, ThresholdUpdater). Both use the same graph topology.
@@ -56,6 +61,11 @@
 - **Choice:** `Goal.description` becomes the primary representation. `success_criteria: list[str]` defines what the LLM evaluates against. `objective: ObjectiveVector | None` remains optional for hybrid use cases.
 - **Rationale:** Text goals align with how humans think about objectives. Success criteria give the LLM evaluator clear checkpoints. Numeric backing is still available for environments that produce scalar observations.
 
+### Fail-Closed Constraint Checking + Error Metadata + Timeouts
+- **Context:** All LLM services silently swallowed errors. `LLMConstraintChecker` failed open on error (assumed safe), which is dangerous — an LLM outage would bypass all constraint checks.
+- **Choice:** (1) `LLMConstraintChecker` now fails closed on error: `return False, "error..."`. (2) `LLMEvaluator` error fallback sets `confidence=0.0` with `metadata={"llm_error": True}`. (3) `LLMPlanner` returns a `noop_fallback` action instead of empty policy. (4) All 4 services accept `timeout: float | None` for `concurrent.futures`-based timeout.
+- **Rationale:** Safety-critical components must fail safely. A constraint checker that assumes "safe" on error undermines the entire constraint envelope. Error metadata enables downstream nodes and metrics to detect degraded operation. Timeouts prevent indefinite hangs on LLM API issues.
+
 ### Soft Constraint Reasoning (Not Boolean Predicates)
 - **Context:** Previously, constraints were `Callable[..., bool]` predicates — either satisfied or not.
 - **Choice:** `LLMConstraintChecker` evaluates each constraint with `severity: float [0,1]`, `reasoning: str`, and `suggested_mitigation: str`. Overall safety is a reasoned judgment, not a conjunction of booleans.
@@ -69,6 +79,16 @@
 ---
 
 ## Goal Management & Feedback
+
+### ConstraintResult as Opt-In Severity Model
+- **Context:** `BaseConstraintChecker.check()` returns `(bool, str)` — no severity, no structured detail. The LLM constraint checker internally produces severity scores but they're lost in the return type.
+- **Choice:** Added `ConstraintResult` frozen dataclass (`passed`, `message`, `severity`, `checker_name`, `suggested_mitigation`, `metadata`). `check_detailed()` on BaseConstraintChecker returns `ConstraintResult` (default wraps `check()`). `ConstraintPipeline.check_all_detailed()` returns `list[ConstraintResult]`.
+- **Rationale:** Opt-in — existing `check()` and `check_all()` are unchanged. `check_detailed()` provides a richer interface for consumers that need severity-based decision-making. Default implementation wraps `check()` so no existing checker needs modification.
+
+### Goal.revise() Mutation Documented, Not Changed
+- **Context:** `Goal.revise()` mutates `self.status = GoalStatus.REVISED` in-place, which is unexpected on a method that also returns a new Goal.
+- **Choice:** Documented the intentional mutation in the docstring. Did not change the behavior.
+- **Rationale:** The mutation is by design — once revised, the original goal is no longer active. Changing this would break the entire revision lineage system. Clear documentation is the right fix.
 
 ### Observation Enrichment Over Service Signature Changes
 - **Context:** LLM services (evaluator, planner, reviser) had no memory of previous steps — they saw only the current snapshot.
@@ -103,6 +123,11 @@
 ---
 
 ## Multi-Agent Coordination
+
+### EvolvingConstraintManager Wired via Builder
+- **Context:** `EvolvingConstraintManager` existed as a standalone service but was never connected to the graph — a dead abstraction.
+- **Choice:** `GraphBuilder.with_evolving_constraints(manager)` sets the manager. `build_teleological_graph(enable_evolving_constraints=True)` wires an `evolve_constraints_node` between `check_constraints` and `plan`. The node records violations, calls `manager.step()`, and emits evolution reasoning to the trace.
+- **Rationale:** Wiring through the builder + graph keeps the integration consistent with existing patterns (grounding_manager, knowledge_store). The evolve node is optional and only added when enabled — zero overhead for existing graphs.
 
 ### LLM Negotiation as 3-Phase Protocol
 - **Context:** Multi-agent negotiation was limited to numeric averaging.
@@ -239,6 +264,21 @@
 ---
 
 ## Infrastructure
+
+### KnowledgeStore Connected to Observation Enrichment
+- **Context:** `KnowledgeStore` existed but was never queried by the graph nodes — another dead abstraction.
+- **Choice:** (1) `_build_enriched_observation()` queries `knowledge_store.query_recent(300)` and appends the last 5 entries to observation text. (2) `reflect_node` writes reflection data (`eval_score`, `stop_reason`, `goal_id`) to the knowledge store via `put()`.
+- **Rationale:** Both integrations are best-effort (try/except) — a KnowledgeStore failure never breaks the loop. Reading in observation enrichment gives LLM services access to accumulated knowledge. Writing in reflection creates a growing corpus of agent self-assessment that future perception steps can leverage.
+
+### Deferred: Agent API Consolidation
+- **Context:** The codebase has both a class hierarchy (`BaseAgent` → `TeleologicalAgent`) and a graph-based API (`GraphBuilder`). The review flagged this as confusing.
+- **Choice:** Defer to a future version. Document the graph API as primary, class hierarchy as adapter.
+- **Rationale:** Consolidation affects 40+ files and would destabilize the codebase. The graph API is already the recommended path. The class hierarchy serves as a compatibility layer and reference implementation.
+
+### Deferred: Streaming-First Design
+- **Context:** The review noted that streaming is bolted on rather than being a first-class concern.
+- **Choice:** Defer to a future version. Add streaming helpers to the builder incrementally.
+- **Rationale:** A streaming-first redesign would affect all examples and the graph builder architecture. Better approached incrementally: add `.stream()` convenience methods, streaming callbacks in the builder, and SSE adapters.
 
 ### Lazy Imports via `__getattr__` in `llm/__init__.py`
 - **Context:** Concrete providers depend on optional packages (anthropic, openai, httpx, transformers/torch).

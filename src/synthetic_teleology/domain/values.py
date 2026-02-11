@@ -161,6 +161,8 @@ class ActionSpec:
     reasoning: str = ""
     parameters: Mapping[str, Any] = field(default_factory=dict)
     cost: float = 0.0
+    effect: tuple[float, ...] | None = None
+    preconditions: Mapping[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -332,4 +334,24 @@ class KnowledgeEntry:
     tags: tuple[str, ...] = ()
     timestamp: float = 0.0
     confidence: float = 1.0
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# ConstraintResult
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ConstraintResult:
+    """Detailed result of a single constraint check.
+
+    Provides richer information than the simple ``(bool, str)`` tuple
+    returned by ``BaseConstraintChecker.check()``.
+    """
+
+    passed: bool
+    message: str = ""
+    severity: float = 0.0  # 0=trivial, 1=critical
+    checker_name: str = ""
+    suggested_mitigation: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)

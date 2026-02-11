@@ -7,6 +7,7 @@ where action selection can be stochastic.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import math
 from typing import Any
@@ -133,18 +134,28 @@ class LLMPlanner(BasePlanner):
         num_hypotheses: int = 3,
         temperature: float = 1.0,
         prompt: ChatPromptTemplate | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.model = model
         self.tools = tools or []
         self.num_hypotheses = num_hypotheses
         self.temperature = temperature
         self._prompt = prompt or _PLANNING_PROMPT
+        self._timeout = timeout
         self._chain = self._build_chain()
 
     def _build_chain(self) -> Any:
         """Build the planning chain with structured output."""
         structured_model = self.model.with_structured_output(PlanningOutput)
         return self._prompt | structured_model
+
+    def _invoke_with_timeout(self, inputs: dict[str, Any]) -> Any:
+        """Invoke the chain with optional timeout."""
+        if self._timeout is None:
+            return self._chain.invoke(inputs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._chain.invoke, inputs)
+            return future.result(timeout=self._timeout)
 
     def _get_tools_description(self) -> str:
         """Generate tool descriptions for the prompt."""
@@ -169,7 +180,7 @@ class LLMPlanner(BasePlanner):
         criteria = goal.success_criteria
 
         try:
-            result: PlanningOutput = self._chain.invoke(
+            result: PlanningOutput = self._invoke_with_timeout(
                 {
                     "num_hypotheses": self.num_hypotheses,
                     "tools_description": self._get_tools_description(),
@@ -265,4 +276,16 @@ class LLMPlanner(BasePlanner):
 
         except Exception as exc:
             logger.warning("LLMPlanner: planning failed: %s", exc)
-            return PolicySpec()
+            noop_action = ActionSpec(
+                name="noop_fallback",
+                description="No-op fallback due to planning error",
+            )
+            return PolicySpec(
+                actions=(noop_action,),
+                metadata={
+                    "planner": "LLMPlanner",
+                    "llm_error": True,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )

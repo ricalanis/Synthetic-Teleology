@@ -67,6 +67,10 @@ class TeleologicalState(TypedDict, total=False):
     constraint_assessments: list[dict]             # NEW: soft constraint reasoning
 
     # -- Injected strategies (set once, read by nodes) -----------------------
+    # DEPRECATED: prefer passing strategies as kwargs to build_teleological_graph()
+    # for closure-based injection (enables LangGraph checkpointing).
+    # These fields are kept for backward compatibility with code that stores
+    # strategies in state directly.
     evaluator: BaseEvaluator
     goal_updater: BaseGoalUpdater
     planner: BasePlanner
@@ -95,6 +99,7 @@ class TeleologicalState(TypedDict, total=False):
     knowledge_store: Any                             # KnowledgeStore instance
     audit_trail: Any                                 # GoalAuditTrail instance
     grounding_manager: Any                           # IntentionalGroundingManager instance
+    evolving_constraint_manager: Any                 # EvolvingConstraintManager instance
 
     # -- Extensibility -------------------------------------------------------
     metadata: dict[str, Any]

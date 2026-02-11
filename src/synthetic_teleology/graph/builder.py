@@ -108,6 +108,7 @@ class GraphBuilder:
         self._human_approval_before: list[str] = []
         self._human_approval_after: list[str] = []
         self._bdi_agent: Any | None = None
+        self._evolving_constraint_manager: Any | None = None
 
     # -- NEW: LLM-first API --------------------------------------------------
 
@@ -297,6 +298,11 @@ class GraphBuilder:
         self._bdi_agent = bdi_agent
         return self
 
+    def with_evolving_constraints(self, manager: Any) -> GraphBuilder:
+        """Attach an EvolvingConstraintManager for co-evolutionary constraints."""
+        self._evolving_constraint_manager = manager
+        return self
+
     def with_metadata(self, **kwargs: Any) -> GraphBuilder:
         """Set additional metadata."""
         self._metadata.update(kwargs)
@@ -391,6 +397,12 @@ class GraphBuilder:
             interrupt_before=self._human_approval_before or None,
             interrupt_after=self._human_approval_after or None,
             enable_grounding=self._grounding_manager is not None,
+            evaluator=evaluator,
+            goal_updater=updater,
+            planner=planner,
+            constraint_pipeline=pipeline,
+            policy_filter=policy_filter,
+            enable_evolving_constraints=self._evolving_constraint_manager is not None,
         )
 
         initial_state: dict[str, Any] = {
@@ -398,11 +410,6 @@ class GraphBuilder:
             "max_steps": self._max_steps,
             "goal_achieved_threshold": self._goal_achieved_threshold,
             "goal": self._goal,
-            "evaluator": evaluator,
-            "goal_updater": updater,
-            "planner": planner,
-            "constraint_pipeline": pipeline,
-            "policy_filter": policy_filter,
             "model": model,
             "tools": self._tools,
             "num_hypotheses": self._num_hypotheses,
@@ -424,6 +431,8 @@ class GraphBuilder:
             initial_state["audit_trail"] = self._audit_trail
         if self._grounding_manager is not None:
             initial_state["grounding_manager"] = self._grounding_manager
+        if self._evolving_constraint_manager is not None:
+            initial_state["evolving_constraint_manager"] = self._evolving_constraint_manager
 
         return app, initial_state
 
@@ -457,6 +466,12 @@ class GraphBuilder:
             interrupt_before=self._human_approval_before or None,
             interrupt_after=self._human_approval_after or None,
             enable_grounding=self._grounding_manager is not None,
+            evaluator=evaluator,
+            goal_updater=updater,
+            planner=planner,
+            constraint_pipeline=pipeline,
+            policy_filter=policy_filter,
+            enable_evolving_constraints=self._evolving_constraint_manager is not None,
         )
 
         initial_state: dict[str, Any] = {
@@ -464,11 +479,6 @@ class GraphBuilder:
             "max_steps": self._max_steps,
             "goal_achieved_threshold": self._goal_achieved_threshold,
             "goal": self._goal,
-            "evaluator": evaluator,
-            "goal_updater": updater,
-            "planner": planner,
-            "constraint_pipeline": pipeline,
-            "policy_filter": policy_filter,
             "perceive_fn": self._perceive_fn,
             "act_fn": self._act_fn,
             "transition_fn": self._transition_fn,
@@ -487,6 +497,8 @@ class GraphBuilder:
             initial_state["audit_trail"] = self._audit_trail
         if self._grounding_manager is not None:
             initial_state["grounding_manager"] = self._grounding_manager
+        if self._evolving_constraint_manager is not None:
+            initial_state["evolving_constraint_manager"] = self._evolving_constraint_manager
 
         return app, initial_state
 
