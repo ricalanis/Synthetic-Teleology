@@ -20,6 +20,8 @@ import json
 import os
 
 from synthetic_teleology.graph import GraphBuilder, WorkingMemory
+from synthetic_teleology.infrastructure.knowledge_store import KnowledgeStore
+from synthetic_teleology.services.audit_trail import GoalAuditTrail
 from synthetic_teleology.services.evolving_constraints import EvolvingConstraintManager
 from synthetic_teleology.services.llm_planning import (
     ActionProposal,
@@ -38,24 +40,20 @@ from .tools import build_tools
 # ---------------------------------------------------------------------------
 
 def _get_model():
-    """Get a real or mock LLM model.
-
-    Tries Anthropic, then OpenAI. Falls back to None so the caller
-    can build a domain-specific mock.
-    """
+    """Get a real LLM model if API keys are available, else return None."""
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
             from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(model="claude-sonnet-4-5-20250929", temperature=0.3)
+            return ChatAnthropic(model="claude-sonnet-4-5-20250929", temperature=0.5)
         except ImportError:
             pass
     if os.getenv("OPENAI_API_KEY"):
         try:
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model="gpt-4o", temperature=0.3)
+            return ChatOpenAI(model="gpt-4o", temperature=0.5)
         except ImportError:
             pass
-    return None
+    return None  # triggers mock path
 
 
 # ---------------------------------------------------------------------------
@@ -353,13 +351,15 @@ def _build_evolving_mock() -> MockStructuredChatModel:
 def build_pipeline_agent(max_steps: int = 25):
     """Build a LangGraph data pipeline fixer agent.
 
-    Returns ``(app, initial_state, pipeline_state)`` tuple.
+    Returns ``(app, initial_state, pipeline_state, knowledge_store, audit_trail)``
+    tuple.
 
     The agent uses:
     - Custom PipelineEvaluator (deterministic, reads PipelineState)
     - LLM planner + reviser via MockStructuredChatModel
     - Simulated tools that mutate PipelineState
     - EvolvingConstraintManager with its own mock model
+    - KnowledgeStore + GoalAuditTrail for metacognitive commons
     """
     pipeline_state = PipelineState()
     tools = build_tools(pipeline_state)
@@ -376,6 +376,34 @@ def build_pipeline_agent(max_steps: int = 25):
             f"schema: {pipeline_state.schema_version}."
         ),
         max_entries=30,
+    )
+
+    # --- Infrastructure ---
+    knowledge_store = KnowledgeStore()
+    audit_trail = GoalAuditTrail(knowledge_store=knowledge_store)
+
+    # Seed knowledge store with initial pipeline config
+    knowledge_store.put(
+        key="pipeline:config",
+        value={
+            "tables": pipeline_state.tables,
+            "schema_version": pipeline_state.schema_version,
+            "baseline_throughput": 1000.0,
+        },
+        source="agent_init",
+        tags=("pipeline", "config"),
+        confidence=1.0,
+    )
+    knowledge_store.put(
+        key="pipeline:initial_health",
+        value={
+            "health_score": pipeline_state.health_score,
+            "error_rate": pipeline_state.error_rate,
+            "throughput": pipeline_state.throughput,
+        },
+        source="agent_init",
+        tags=("pipeline", "health"),
+        confidence=1.0,
     )
 
     # --- Models ---
@@ -414,6 +442,8 @@ def build_pipeline_agent(max_steps: int = 25):
         .with_evaluator(evaluator)
         .with_constraint_checkers(budget_checker, safety_checker)
         .with_evolving_constraints(constraint_manager)
+        .with_knowledge_store(knowledge_store)
+        .with_audit_trail(audit_trail)
         .with_environment(
             perceive_fn=memory.perceive,
             transition_fn=memory.record,
@@ -423,4 +453,4 @@ def build_pipeline_agent(max_steps: int = 25):
         .build()
     )
 
-    return app, initial_state, pipeline_state
+    return app, initial_state, pipeline_state, knowledge_store, audit_trail

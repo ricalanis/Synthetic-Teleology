@@ -9,6 +9,7 @@ Options:
 """
 
 import argparse
+import os
 
 from .agent import build_pipeline_agent
 
@@ -25,13 +26,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Detect mode
+    has_key = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"))
+    mode = "LIVE LLM" if has_key else "SIMULATED (MockStructuredChatModel)"
+
     # --- Build ---
-    app, initial_state, pipeline_state = build_pipeline_agent(max_steps=args.steps)
+    app, initial_state, pipeline_state, knowledge_store, audit_trail = (
+        build_pipeline_agent(max_steps=args.steps)
+    )
 
     # --- Initial state ---
     print("=" * 65)
     print("  Data Pipeline Fixer Agent")
     print("=" * 65)
+    print(f"  Mode:       {mode}")
     print(f"  Tables:     {', '.join(pipeline_state.tables)}")
     print(f"  Health:     {pipeline_state.health_score:.2f}")
     print(f"  Error rate: {pipeline_state.error_rate:.2f}")
@@ -113,6 +121,30 @@ def main() -> None:
                         print(f"    Modified: '{old}' -> '{new}'")
             print()
 
+    # Goal audit trail
+    if len(audit_trail) > 0:
+        print(f"Goal Audit Trail ({len(audit_trail)} entries):")
+        for entry in audit_trail.entries:
+            print(f"  [{entry.entry_id}] goal={entry.goal_id[:12]}...")
+            print(f"    reason: {entry.revision_reason[:80]}")
+            print(f"    eval_score: {entry.eval_score:.4f}")
+        print()
+    else:
+        print("Goal Audit Trail: no revisions recorded")
+        print()
+
+    # Knowledge store
+    ks_keys = knowledge_store.keys()
+    print(f"Knowledge Store ({len(knowledge_store)} entries):")
+    for key in ks_keys[:15]:
+        entry = knowledge_store.get(key)
+        if entry is not None:
+            value_preview = str(entry.value)[:60].replace("\n", " ")
+            print(f"  {key:40s} -> {value_preview}")
+    if len(knowledge_store) > 15:
+        print(f"  ... and {len(knowledge_store) - 15} more entries")
+    print()
+
     # Verbose: show eval history
     if args.verbose:
         eval_history = result.get("eval_history", [])
@@ -141,6 +173,8 @@ def main() -> None:
     print(f"  Throughput:       {pipeline_state.throughput:.0f} rec/s")
     print(f"  Fix attempts:     {pipeline_state.fix_attempts_count}")
     print(f"  Events emitted:   {len(result.get('events', []))}")
+    print(f"  Audit entries:    {len(audit_trail)}")
+    print(f"  Knowledge entries:{len(knowledge_store)}")
     if ecm is not None:
         print(f"  Constraints:      {len(ecm.constraints)} active")
         print(f"  Evolutions:       {len(ecm.evolution_history)} rounds")

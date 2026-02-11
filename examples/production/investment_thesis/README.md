@@ -57,6 +57,24 @@ investment_thesis/
   README.md         # This file
 ```
 
+## Architecture
+
+```
+FinancialDataTool -----+
+NewsSearchTool ---------+---> ThesisState (shared mutable env)
+FilingAnalyzerTool -----+         |
+SentimentTool ----------+         v
+                            ThesisEvaluator (custom, deterministic)
+                                     |
+                               eval score <= -0.3?
+                                /            \
+                              no              yes
+                              |                |
+                           LLMPlanner      LLMReviser -> goal revision
+                              |                |
+                              +--- act_node ---+
+```
+
 ## Key Patterns Demonstrated
 
 - **Hybrid mock**: custom evaluator for deterministic scoring + mock LLM for planning/revision

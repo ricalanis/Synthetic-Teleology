@@ -29,12 +29,7 @@ from .tools import (
 
 
 def _get_model():
-    """Get a real or mock LLM model.
-
-    In LLM mode, the model is used by the LLMPlanner and LLMReviser.
-    The custom ThesisEvaluator handles evaluation, so the model is only
-    needed for planning and revision reasoning.
-    """
+    """Get a real LLM model if API keys are available, else return None."""
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
             from langchain_anthropic import ChatAnthropic
@@ -47,9 +42,7 @@ def _get_model():
             return ChatOpenAI(model="gpt-4o", temperature=0.5)
         except ImportError:
             pass
-
-    # Simulated mode: mock provides PlanningOutput + RevisionOutput
-    return _build_mock_model()
+    return None  # triggers mock path
 
 
 def _build_mock_model():
@@ -374,7 +367,7 @@ def build_thesis_agent(max_steps: int = 30):
     )
 
     # --- Model ---
-    model = _get_model()
+    model = _get_model() or _build_mock_model()
 
     # --- Build graph ---
     app, initial_state = (

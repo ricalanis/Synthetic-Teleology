@@ -55,6 +55,31 @@ def main() -> None:
     print("-" * 64)
     print()
 
+    # Verbose: step-by-step
+    if args.verbose:
+        eval_history = result.get("eval_history", [])
+        action_history = result.get("action_history", [])
+        feedback = result.get("action_feedback", [])
+
+        for i, sig in enumerate(eval_history):
+            step_num = i + 1
+            print(f"--- Step {step_num} ---")
+            print(f"  Eval: {sig.score:.3f} (confidence {sig.confidence:.2f})")
+            if sig.explanation:
+                print(f"  Detail: {sig.explanation[:100]}")
+
+            if i < len(action_history):
+                action = action_history[i]
+                tool_info = f" [tool: {action.tool_name}]" if action.tool_name else ""
+                print(f"  Action: {action.name}{tool_info}")
+
+            if i < len(feedback):
+                fb = feedback[i]
+                if fb.get("result"):
+                    print(f"  Result: {str(fb['result'])[:90]}")
+
+            print()
+
     # Research findings summary
     print(f"Research Findings ({len(research_state.findings)} total):")
     for i, finding in enumerate(research_state.findings[:20], 1):

@@ -22,8 +22,8 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true", help="Show step-by-step output")
     args = parser.parse_args()
 
-    has_api_key = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"))
-    mode = "LIVE LLM" if has_api_key else "SIMULATED"
+    has_key = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"))
+    mode = "LIVE LLM" if has_key else "SIMULATED (MockStructuredChatModel)"
 
     print("=" * 65)
     print("  Investment Thesis Builder Agent")
@@ -141,23 +141,27 @@ def main() -> None:
         print()
 
     # Audit trail
-    entries = audit_trail._entries
-    if entries:
-        print(f"Audit Trail ({len(entries)} entries):")
-        for entry in entries[:5]:
+    if len(audit_trail) > 0:
+        print(f"Audit Trail ({len(audit_trail)} entries):")
+        for entry in audit_trail.entries[:5]:
             print(f"  [{entry.goal_id[:12]}...] reason: {entry.revision_reason[:60]}")
-        if len(entries) > 5:
-            print(f"  ... and {len(entries) - 5} more entries")
+        if len(audit_trail) > 5:
+            print(f"  ... and {len(audit_trail) - 5} more entries")
+        print()
+    else:
+        print("Audit Trail: no revisions recorded")
         print()
 
     # Knowledge store
-    ks_entries = knowledge_store._entries
-    if ks_entries:
-        print(f"Knowledge Store ({len(ks_entries)} entries):")
-        for key in list(ks_entries.keys())[:5]:
-            print(f"  {key}: {str(ks_entries[key].value)[:60]}")
-        if len(ks_entries) > 5:
-            print(f"  ... and {len(ks_entries) - 5} more entries")
+    ks_keys = knowledge_store.keys()
+    if ks_keys:
+        print(f"Knowledge Store ({len(knowledge_store)} entries):")
+        for key in ks_keys[:5]:
+            entry = knowledge_store.get(key)
+            if entry is not None:
+                print(f"  {key}: {str(entry.value)[:60]}")
+        if len(knowledge_store) > 5:
+            print(f"  ... and {len(knowledge_store) - 5} more entries")
         print()
 
     # --- Final summary ---

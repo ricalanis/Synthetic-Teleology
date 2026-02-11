@@ -9,6 +9,7 @@ Options:
 """
 
 import argparse
+import os
 
 from .agent import build_curriculum_agent
 from .models import REACT_CURRICULUM
@@ -22,15 +23,20 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true", help="Show detailed per-step output")
     args = parser.parse_args()
 
+    # Detect mode
+    has_key = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"))
+    mode = "LIVE LLM" if has_key else "SIMULATED (MockStructuredChatModel)"
+
     # --- Build ---
-    app, initial_state, curriculum_state, knowledge_store = build_curriculum_agent(
-        max_steps=args.steps,
+    app, initial_state, curriculum_state, knowledge_store, audit_trail = (
+        build_curriculum_agent(max_steps=args.steps)
     )
 
     # --- Overview ---
     print("=" * 65)
     print("  Adaptive Learning Curriculum Agent")
     print("=" * 65)
+    print(f"  Mode:           {mode}")
     print(f"  Max steps:      {args.steps}")
     print(f"  Topics:         {len(REACT_CURRICULUM)}")
     print()
@@ -98,6 +104,18 @@ def main() -> None:
         print(f"  ... and {len(ks_keys) - 20} more entries")
     print()
 
+    # Goal audit trail
+    if len(audit_trail) > 0:
+        print(f"Goal Audit Trail ({len(audit_trail)} entries):")
+        for entry in audit_trail.entries:
+            print(f"  [{entry.entry_id}] goal={entry.goal_id[:12]}...")
+            print(f"    reason: {entry.revision_reason[:80]}")
+            print(f"    eval_score: {entry.eval_score:.4f}")
+        print()
+    else:
+        print("Goal Audit Trail: no revisions recorded")
+        print()
+
     # Goal revision history
     goal_history = result.get("goal_history", [])
     if goal_history:
@@ -143,6 +161,7 @@ def main() -> None:
     print(f"  Resources found:      {curriculum_state.resources_found}")
     print(f"  Time spent:           {curriculum_state.learner.total_time_spent:.0f} min")
     print(f"  Goal revisions:       {len(goal_history)}")
+    print(f"  Audit entries:        {len(audit_trail)}")
     print(f"  Knowledge entries:    {len(knowledge_store)}")
     print(f"  Events emitted:       {len(result.get('events', []))}")
     print("=" * 65)

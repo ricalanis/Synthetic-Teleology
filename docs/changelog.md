@@ -4,6 +4,18 @@ All notable changes to the Synthetic Teleology Framework.
 
 ## Unreleased
 
+### Normalize Production Examples
+
+Standardized all 5 production examples for consistency (14 files modified):
+
+- **`_get_model()` pattern**: All 5 examples now return `None` (not mock), caller uses `_get_model() or _build_mock_model()`. Fixed investment_thesis, learning_curriculum (returned mock directly), data_pipeline_fixer (temperature 0.3 → 0.5).
+- **`__init__.py` exports**: All 5 now export their `build_*` function.
+- **KnowledgeStore + AuditTrail**: Added to data_pipeline_fixer (had neither) and learning_curriculum (had KS but no AT). Both now seed KS and wire AT.
+- **Mode detection**: Added `LIVE LLM` vs `SIMULATED` banner to data_pipeline_fixer and learning_curriculum main.py (competitive_research, investment_thesis, deployment_coordinator already had it).
+- **Verbose output**: competitive_research main.py now shows step-by-step eval/action/feedback when `--verbose` is passed (flag existed but was unused).
+- **Private attribute access**: investment_thesis main.py replaced `audit_trail._entries` and `knowledge_store._entries` with public API (`audit_trail.entries`, `knowledge_store.keys()`/`.get()`).
+- **README diagram**: Added ASCII architecture diagram to investment_thesis README.md.
+
 ### 5 Production Examples (30 new files)
 
 Five production-grade examples demonstrating the framework's LLM-first features in realistic, long-running scenarios. All use the hybrid mock pattern: custom evaluator for deterministic scoring + MockStructuredChatModel for planner/reviser. Self-contained (no API key required); set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` for real LLM mode.

@@ -13,6 +13,7 @@ import os
 
 from synthetic_teleology.graph import GraphBuilder, WorkingMemory
 from synthetic_teleology.infrastructure.knowledge_store import KnowledgeStore
+from synthetic_teleology.services.audit_trail import GoalAuditTrail
 
 from .models import REACT_CURRICULUM, CurriculumState, create_default_learner
 from .strategies import CurriculumEvaluator, PrerequisiteChecker, TimeBudgetChecker
@@ -302,14 +303,7 @@ def _build_mock_responses() -> list:
 
 
 def _get_model():
-    """Get a real or mock LLM model.
-
-    In LLM mode the model handles planning and revision.
-    The evaluator is custom (CurriculumEvaluator) so the model is NOT
-    called for evaluation.
-
-    Precedence: Anthropic -> OpenAI -> MockStructuredChatModel.
-    """
+    """Get a real LLM model if API keys are available, else return None."""
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
             from langchain_anthropic import ChatAnthropic
@@ -322,11 +316,7 @@ def _get_model():
             return ChatOpenAI(model="gpt-4o", temperature=0.5)
         except ImportError:
             pass
-
-    # Simulated mode
-    from synthetic_teleology.testing import MockStructuredChatModel
-
-    return MockStructuredChatModel(structured_responses=_build_mock_responses())
+    return None  # triggers mock path
 
 
 # ---------------------------------------------------------------------------
@@ -334,10 +324,18 @@ def _get_model():
 # ---------------------------------------------------------------------------
 
 
+def _build_mock_model():
+    """Build a MockStructuredChatModel with curriculum progression responses."""
+    from synthetic_teleology.testing import MockStructuredChatModel
+
+    return MockStructuredChatModel(structured_responses=_build_mock_responses())
+
+
 def build_curriculum_agent(max_steps: int = 35):
     """Build a LangGraph curriculum agent.
 
-    Returns ``(app, initial_state, curriculum_state, knowledge_store)`` tuple.
+    Returns ``(app, initial_state, curriculum_state, knowledge_store, audit_trail)``
+    tuple.
     """
     # Domain state
     learner = create_default_learner()
@@ -365,8 +363,9 @@ def build_curriculum_agent(max_steps: int = 35):
     )
     memory = WorkingMemory(initial_context=initial_context, max_entries=40)
 
-    # Knowledge store for metacognitive commons
+    # Infrastructure
     knowledge_store = KnowledgeStore()
+    audit_trail = GoalAuditTrail(knowledge_store=knowledge_store)
 
     # Seed initial knowledge
     knowledge_store.put(
@@ -379,7 +378,8 @@ def build_curriculum_agent(max_steps: int = 35):
         tags=("learner", "profile"),
     )
 
-    model = _get_model()
+    # Model
+    model = _get_model() or _build_mock_model()
 
     app, initial_state = (
         GraphBuilder("learning-curriculum")
@@ -397,6 +397,7 @@ def build_curriculum_agent(max_steps: int = 35):
         .with_evaluator(evaluator)
         .with_constraint_checkers(prereq_checker, time_checker)
         .with_knowledge_store(knowledge_store)
+        .with_audit_trail(audit_trail)
         .with_environment(
             perceive_fn=memory.perceive,
             transition_fn=memory.record,
@@ -406,4 +407,4 @@ def build_curriculum_agent(max_steps: int = 35):
         .build()
     )
 
-    return app, initial_state, curriculum_state, knowledge_store
+    return app, initial_state, curriculum_state, knowledge_store, audit_trail
