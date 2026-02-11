@@ -37,6 +37,20 @@ Agents built with the toolkit now behave like paper-described agents: tool/actio
 - `examples/conceptual/11_llm_quickstart.py` — WorkingMemory + `.with_environment()`
 - `examples/conceptual/12_llm_tools.py` — WorkingMemory + `.with_environment()`
 
+#### Self-Contained LLM Examples
+- Examples 11-13 rewritten as self-contained (no API key required)
+- `synthetic_teleology.testing` module: `MockStructuredChatModel` promoted from `tests/helpers/` to public API
+- Examples default to mock LLM, optionally use real LLM when API key is present
+- All examples demonstrate the feedback loop: action_feedback, enriched observation, WorkingMemory
+
+#### Files Changed (examples rewrite)
+- `src/synthetic_teleology/testing/__init__.py` — **NEW**: public testing utilities
+- `src/synthetic_teleology/testing/mock_llm.py` — **NEW**: MockStructuredChatModel (promoted)
+- `tests/helpers/mock_llm.py` — re-exports from new location
+- `examples/conceptual/11_llm_quickstart.py` — self-contained + feedback loop demo
+- `examples/conceptual/12_llm_tools.py` — self-contained + tool feedback demo
+- `examples/conceptual/13_llm_multi_agent.py` — self-contained + per-agent feedback
+
 #### Stats
 - **636 tests** (617 + 19 new), all passing
 - 19 new tests in `test_working_memory.py` (8) + `test_action_feedback.py` (11)

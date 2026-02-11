@@ -1,43 +1,70 @@
-# Synthetic Teleology — LLM-First LangGraph Toolkit
+# Synthetic Teleology
 
-LangGraph toolkit for building **LLM-powered goal-directed agents** implementing Haidemariam (2026) *"From the logic of coordination to goal-directed reasoning"* — the theory of **Synthetic Teleology** in Agentic AI.
+LangGraph implementation of Haidemariam (2026) **Synthetic Teleology** for building goal-directed AI agents with recursive self-evaluation.
 
-## Overview
+## What is Synthetic Teleology?
 
-Synthetic Teleology provides an **LLM-first, probabilistic architecture** for building agents that can:
+Synthetic Teleology is the **engineered capacity of AI systems to generate, pursue, and revise goals through recursive self-evaluation** (Haidemariam, 2026). Unlike reactive or purely reward-driven agents, teleological agents maintain an internal goal-directed loop that continuously evaluates progress, adapts strategy, and revises objectives when needed.
 
-- **Evaluate** progress using LLM reasoning with structured output (or pluggable numeric evaluators)
-- **Revise** goals dynamically — LLM reasons about whether and how to adapt goals
-- **Plan** with multi-hypothesis generation — N candidate plans scored by confidence
-- **Check constraints** via soft reasoning with severity scores (not just boolean predicates)
-- **Reflect** on full reasoning traces to decide whether to continue or adjust strategy
-- **Coordinate** multiple agents through LLM-powered negotiation
-- **Measure** behavior against 8 teleological metrics (including LLM-specific ReasoningQuality)
+The core of the theory is a **recursive goal maintenance loop** (Equations 1–6):
 
-The teleological loop runs as a **LangGraph StateGraph**: **Perceive → Evaluate → Revise → Plan → Filter → Act → Reflect**.
+```
+Perceive → Evaluate → Revise → Plan → Filter → Act → Transition
+    ↑                                                      │
+    └──────────────────────────────────────────────────────┘
+```
+
+Each cycle, the agent:
+1. **Perceives** the environment state *S_t*
+2. **Evaluates** goal progress via scoring function *E(G_t, S_t)*
+3. **Revises** the goal *G_t → G_{t+1}* if evaluation warrants change
+4. **Plans** a policy *π_t* mapping states to actions
+5. **Filters** the plan through constraints *C(π_t)*
+6. **Acts** in the environment to produce *S_{t+1}*
+7. **Transitions** to the next cycle with updated state
+
+The framework grounds agent design in four **pillars of agency**: Intentionality (goal-directedness), Autonomy (self-governance), Adaptivity (goal revision under uncertainty), and Sociality (multi-agent coordination).
+
+> Haidemariam, Y. A. (2026). From the logic of coordination to goal-directed reasoning: Synthetic teleology in agentic AI. *Frontiers in Artificial Intelligence*, 9, 1592432.
+
+## Features
+
+- **LLM-powered evaluation, planning, revision, and constraint checking** — structured output via Pydantic schemas
+- **Multi-hypothesis planning** with softmax selection over confidence scores
+- **Soft constraint reasoning** with severity scores and suggested mitigations
+- **Goal revision** with provenance tracking and audit trail
+- **Multi-agent coordination** with negotiation protocols (propose → critique → synthesize)
+- **Parallel agent execution** via LangGraph Send API
+- **8 teleological metrics** — 7 from the paper + ReasoningQuality for LLM traces
+- **Dual-mode architecture** — LLM reasoning or numeric computation, auto-detected by the builder
+- **Self-contained examples** — all run without API keys using built-in mock models
+- **Active inference** via expected free energy decomposition
+- **Self-modeling evaluation** with surprise detection and confidence adjustment
+- **Evolving constraints** and distributed intentional grounding
+- **BDI bridge** — classical Belief-Desire-Intention mapping to LangGraph nodes
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     LANGGRAPH LAYER (v1.0)                        │
-│  StateGraph, LLM Nodes, Probabilistic Edges, Builder, Streaming  │
+│                       LANGGRAPH LAYER                            │
+│  StateGraph, LLM Nodes, Probabilistic Edges, Builder, Streaming │
 ├──────────────────────────────────────────────────────────────────┤
-│                  LLM REASONING SERVICES (NEW)                     │
-│  LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker      │
-│  (structured output via with_structured_output / tool-calling)    │
+│                    LLM REASONING SERVICES                        │
+│  LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker     │
+│  (structured output via with_structured_output / tool-calling)   │
 ├──────────────────────────────────────────────────────────────────┤
-│                 TELEOLOGY DOMAIN (adapted)                        │
-│  Goal (text+optional vector), EvalSignal, Hypothesis, Events      │
+│                    TELEOLOGY DOMAIN                               │
+│  Goal (text + optional vector), EvalSignal, Hypothesis, Events   │
 ├──────────────────────────────────────────────────────────────────┤
-│                 NUMERIC STRATEGY SERVICES (preserved)             │
-│  NumericEvaluator, GreedyPlanner, ThresholdUpdater, etc.          │
+│                    NUMERIC STRATEGY SERVICES                      │
+│  NumericEvaluator, GreedyPlanner, ThresholdUpdater, etc.         │
 ├──────────────────────────────────────────────────────────────────┤
-│                 MEASUREMENT DOMAIN                                │
-│  8 Metrics (incl. ReasoningQuality), Benchmarks, Reports          │
+│                    MEASUREMENT                                    │
+│  8 Metrics, MetricsEngine, Benchmarks, Reports                   │
 ├──────────────────────────────────────────────────────────────────┤
-│                 INFRASTRUCTURE                                    │
-│  LangChain BaseChatModel, EventBus, Registry, Config              │
+│                    INFRASTRUCTURE                                 │
+│  LangChain BaseChatModel, EventBus, Registry, Config             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +90,9 @@ pip install -e ".[dev]"
 
 **Requires:** Python >= 3.11
 
-## Quick Start — LLM Mode (v1.0)
+## Quick Start
+
+### LLM Agent
 
 ```python
 from langchain_anthropic import ChatAnthropic  # or ChatOpenAI, ChatOllama, etc.
@@ -92,7 +121,7 @@ print(f"Eval score: {result['eval_signal'].score:.4f}")
 print(f"Reasoning: {result['eval_signal'].reasoning[:200]}")
 ```
 
-### One-liner Constructors
+#### One-liner Constructor
 
 ```python
 from synthetic_teleology.graph import create_llm_agent
@@ -107,7 +136,7 @@ app, state = create_llm_agent(
 result = app.invoke(state)
 ```
 
-### Numeric Mode (backward compatible)
+### Numeric Agent
 
 ```python
 from synthetic_teleology.graph import GraphBuilder
@@ -150,16 +179,7 @@ result = app.invoke({...})
 
 ## Examples
 
-### LLM Mode (NEW in v1.0)
-
-| # | File | Demonstrates |
-|---|------|-------------|
-| 11 | `conceptual/11_llm_quickstart.py` | LLM agent with natural language goals, multi-hypothesis planning |
-| 12 | `conceptual/12_llm_tools.py` | LLM agent with LangChain tools for actions |
-| 13 | `conceptual/13_llm_multi_agent.py` | Multi-agent LLM coordination with per-agent goals |
-| 14 | `conceptual/14_llm_metrics.py` | ReasoningQuality metric + LLM log analysis (no API key needed) |
-
-### Numeric Mode (Conceptual)
+All examples are self-contained and run without API keys using built-in mock models. When a real API key is detected, examples automatically switch to the live LLM.
 
 | # | File | Demonstrates |
 |---|------|-------------|
@@ -173,16 +193,20 @@ result = app.invoke({...})
 | 08 | `conceptual/08_environments.py` | ResourceEnvironment (scarcity), ResearchEnvironment (knowledge synthesis) |
 | 09 | `conceptual/09_metrics_measurement.py` | All 7 teleological metrics, MetricsEngine, AgentLog, MetricsReport |
 | 10 | `conceptual/10_ethical_constraints.py` | EthicalChecker predicates, ConstraintPipeline (fail_fast), PolicyFilter |
+| 11 | `conceptual/11_llm_quickstart.py` | LLM agent with natural language goals, multi-hypothesis planning |
+| 12 | `conceptual/12_llm_tools.py` | LLM agent with LangChain tools for actions |
+| 13 | `conceptual/13_llm_multi_agent.py` | Multi-agent LLM coordination with per-agent goals |
+| 14 | `conceptual/14_llm_metrics.py` | ReasoningQuality metric + LLM log analysis |
 
 ```bash
-PYTHONPATH=src python examples/conceptual/14_llm_metrics.py   # no API key needed
-PYTHONPATH=src python examples/conceptual/11_llm_quickstart.py # requires API key
-PYTHONPATH=src python examples/conceptual/01_basic_loop.py     # numeric mode
+PYTHONPATH=src python examples/conceptual/14_llm_metrics.py
+PYTHONPATH=src python examples/conceptual/11_llm_quickstart.py
+PYTHONPATH=src python examples/conceptual/01_basic_loop.py
 ```
 
 ### Production
 
-Full-featured agents that demonstrate real-world usage with custom evaluators, planners, and constraint checkers:
+Full-featured agents with custom evaluators, planners, and constraint checkers:
 
 | Agent | Description | Run |
 |-------|-------------|-----|
@@ -193,7 +217,7 @@ Both agents run in simulated mode by default. Pass `--live` to use real APIs (re
 
 ## Metrics
 
-The framework implements 8 metrics (7 from theory + 1 LLM-specific):
+The framework implements 8 teleological metrics (7 from the paper + ReasoningQuality):
 
 | Metric | Abbreviation | Measures |
 |--------|-------------|----------|
@@ -204,7 +228,7 @@ The framework implements 8 metrics (7 from theory + 1 LLM-specific):
 | Normative Fidelity | NF | Fraction of steps without constraint violations |
 | Innovation Yield | IY | Score improvement from novel actions |
 | Lyapunov Stability | LS | Score variance convergence over time |
-| **Reasoning Quality** | **RQ** | **Coherence and diversity of LLM reasoning traces (NEW)** |
+| Reasoning Quality | RQ | Coherence and diversity of LLM reasoning traces |
 
 ## Testing
 
@@ -212,16 +236,16 @@ The framework implements 8 metrics (7 from theory + 1 LLM-specific):
 PYTHONPATH=src .venv/bin/python -m pytest tests/ -v
 ```
 
-**498 tests** covering all modules (380 original + 69 graph + 49 LLM services).
+**636 tests** covering all modules.
 
-## Dual Mode Architecture
+## Dual-Mode Architecture
 
-The framework supports **two modes** detected automatically by the builder:
+The framework supports two modes detected automatically by the builder:
 
 | Mode | Trigger | Services | Requires API Key |
 |------|---------|----------|-----------------|
-| **LLM Mode** (new) | `.with_model(model)` | LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker | Yes |
-| **Numeric Mode** (legacy) | `.with_objective(values)` | NumericEvaluator, GreedyPlanner, ThresholdUpdater | No |
+| **LLM Mode** | `.with_model(model)` | LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker | Yes |
+| **Numeric Mode** | `.with_objective(values)` | NumericEvaluator, GreedyPlanner, ThresholdUpdater | No |
 
 ## Package Structure
 
@@ -232,20 +256,20 @@ src/synthetic_teleology/
 │   ├── nodes.py         # 8 node functions (LLM + numeric dual-mode)
 │   ├── edges.py         # Conditional routing
 │   ├── graph.py         # build_teleological_graph()
-│   ├── builder.py       # GraphBuilder fluent API (LLM-first + numeric)
+│   ├── builder.py       # GraphBuilder fluent API
 │   ├── prebuilt.py      # create_llm_agent(), create_numeric_agent()
-│   ├── multi_agent.py   # Multi-agent coordination (LLM + numeric)
+│   ├── multi_agent.py   # Multi-agent coordination
 │   └── streaming.py     # Stream event formatters
 ├── services/
-│   ├── llm_evaluation.py   # LLMEvaluator (structured output) — NEW
-│   ├── llm_planning.py     # LLMPlanner (multi-hypothesis) — NEW
-│   ├── llm_revision.py     # LLMReviser (LLM goal revision) — NEW
-│   ├── llm_constraints.py  # LLMConstraintChecker (soft reasoning) — NEW
+│   ├── llm_evaluation.py   # LLMEvaluator (structured output)
+│   ├── llm_planning.py     # LLMPlanner (multi-hypothesis)
+│   ├── llm_revision.py     # LLMReviser (LLM goal revision)
+│   ├── llm_constraints.py  # LLMConstraintChecker (soft reasoning)
 │   ├── evaluation.py       # NumericEvaluator, CompositeEvaluator, etc.
 │   ├── planning.py         # GreedyPlanner, StochasticPlanner, etc.
 │   ├── goal_revision.py    # ThresholdUpdater, GradientUpdater, etc.
 │   └── constraint_engine.py # ConstraintPipeline, PolicyFilter
-├── domain/              # Goal (text+vector), EvalSignal, Hypothesis, events
+├── domain/              # Goal (text + vector), EvalSignal, Hypothesis, events
 ├── environments/        # Numeric, resource, research, shared environments
 ├── measurement/         # Collector, 8 metrics, engine, reports, benchmarks
 ├── infrastructure/      # EventBus, registry, config, LangChain bridge
