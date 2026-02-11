@@ -1,42 +1,44 @@
-# Synthetic Teleology — LangGraph Toolkit
+# Synthetic Teleology — LLM-First LangGraph Toolkit
 
-LangGraph toolkit for building **goal-directed agents** implementing Haidemariam (2026) *"From the logic of coordination to goal-directed reasoning"* — the theory of **Synthetic Teleology** in Agentic AI.
+LangGraph toolkit for building **LLM-powered goal-directed agents** implementing Haidemariam (2026) *"From the logic of coordination to goal-directed reasoning"* — the theory of **Synthetic Teleology** in Agentic AI.
 
 ## Overview
 
-Synthetic Teleology provides a LangGraph-native architecture for building agents that can:
+Synthetic Teleology provides an **LLM-first, probabilistic architecture** for building agents that can:
 
-- **Evaluate** their progress toward objectives using pluggable evaluation strategies
-- **Revise** goals dynamically based on feedback, constraints, and environmental changes
-- **Plan** and execute actions through configurable planning strategies
-- **Reflect** on their own performance to adjust confidence and detect drift
-- **Coordinate** with other agents through negotiation protocols
-- **Measure** their behavior against 7 teleological metrics from the theory
+- **Evaluate** progress using LLM reasoning with structured output (or pluggable numeric evaluators)
+- **Revise** goals dynamically — LLM reasons about whether and how to adapt goals
+- **Plan** with multi-hypothesis generation — N candidate plans scored by confidence
+- **Check constraints** via soft reasoning with severity scores (not just boolean predicates)
+- **Reflect** on full reasoning traces to decide whether to continue or adjust strategy
+- **Coordinate** multiple agents through LLM-powered negotiation
+- **Measure** behavior against 8 teleological metrics (including LLM-specific ReasoningQuality)
 
 The teleological loop runs as a **LangGraph StateGraph**: **Perceive → Evaluate → Revise → Plan → Filter → Act → Reflect**.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  LANGGRAPH LAYER (v0.2.0)                    │
-│  StateGraph, Nodes, Edges, Builder, Streaming, Multi-Agent   │
-├─────────────────────────────────────────────────────────────┤
-│                    TELEOLOGY DOMAIN                          │
-│  Goal, GoalTree, GoalRevision, EvalSignal, Constraints       │
-├─────────────────────────────────────────────────────────────┤
-│                   STRATEGY SERVICES                          │
-│  Evaluators, GoalUpdaters, Planners, ConstraintPipeline      │
-├─────────────────────────────────────────────────────────────┤
-│                  COORDINATION DOMAIN                         │
-│  ConsensusNegotiator, VotingNegotiator, AuctionNegotiator    │
-├─────────────────────────────────────────────────────────────┤
-│                  MEASUREMENT DOMAIN                          │
-│  MetricsEngine, Benchmark, Report, TimeSeriesLog             │
-├─────────────────────────────────────────────────────────────┤
-│                  INFRASTRUCTURE                              │
-│  LLMProvider, EventBus, Registry, Config, CLI                │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                     LANGGRAPH LAYER (v1.0)                        │
+│  StateGraph, LLM Nodes, Probabilistic Edges, Builder, Streaming  │
+├──────────────────────────────────────────────────────────────────┤
+│                  LLM REASONING SERVICES (NEW)                     │
+│  LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker      │
+│  (structured output via with_structured_output / tool-calling)    │
+├──────────────────────────────────────────────────────────────────┤
+│                 TELEOLOGY DOMAIN (adapted)                        │
+│  Goal (text+optional vector), EvalSignal, Hypothesis, Events      │
+├──────────────────────────────────────────────────────────────────┤
+│                 NUMERIC STRATEGY SERVICES (preserved)             │
+│  NumericEvaluator, GreedyPlanner, ThresholdUpdater, etc.          │
+├──────────────────────────────────────────────────────────────────┤
+│                 MEASUREMENT DOMAIN                                │
+│  8 Metrics (incl. ReasoningQuality), Benchmarks, Reports          │
+├──────────────────────────────────────────────────────────────────┤
+│                 INFRASTRUCTURE                                    │
+│  LangChain BaseChatModel, EventBus, Registry, Config              │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Installation
@@ -61,26 +63,23 @@ pip install -e ".[dev]"
 
 **Requires:** Python >= 3.11
 
-## Quick Start
+## Quick Start — LLM Mode (v1.0)
 
 ```python
+from langchain_anthropic import ChatAnthropic  # or ChatOpenAI, ChatOllama, etc.
 from synthetic_teleology.graph import GraphBuilder
-from synthetic_teleology.environments.numeric import NumericEnvironment
 
-# Create environment
-env = NumericEnvironment(dimensions=2, initial_state=(0.0, 0.0))
-
-# Build a teleological graph with one line
+# Build an LLM-powered teleological agent
 app, initial_state = (
     GraphBuilder("my-agent")
-    .with_objective((5.0, 5.0))            # target values
-    .with_max_steps(20)                     # loop limit
-    .with_goal_achieved_threshold(0.9)      # early stop
-    .with_environment(
-        perceive_fn=lambda: env.observe(),
-        act_fn=lambda p, s: p.actions[0] if p.size > 0 else None,
-        transition_fn=lambda a: env.step(a) if a else None,
+    .with_model(ChatAnthropic(model="claude-sonnet-4-5-20250929"))
+    .with_goal(
+        "Increase team productivity by 25%",
+        criteria=["Identify bottlenecks", "Propose actionable solutions"],
     )
+    .with_constraints("No layoffs", "Implement within 1 quarter")
+    .with_max_steps(10)
+    .with_num_hypotheses(3)             # multi-hypothesis planning
     .build()
 )
 
@@ -89,32 +88,45 @@ result = app.invoke(initial_state)
 
 print(f"Steps: {result['step']}")
 print(f"Stop reason: {result.get('stop_reason')}")
-print(f"Final eval score: {result['eval_signal'].score:.4f}")
+print(f"Eval score: {result['eval_signal'].score:.4f}")
+print(f"Reasoning: {result['eval_signal'].reasoning[:200]}")
 ```
 
 ### One-liner Constructors
 
 ```python
-from synthetic_teleology.graph import create_teleological_agent
+from synthetic_teleology.graph import create_llm_agent
 
-app, state = create_teleological_agent(
-    target_values=(10.0, 20.0),
-    perceive_fn=lambda: env.observe(),
-    transition_fn=lambda a: env.step(a) if a else None,
-    max_steps=50,
+app, state = create_llm_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-5-20250929"),
+    goal="Analyze market trends and propose investment strategy",
+    criteria=["Risk-adjusted returns > 8%"],
+    constraints=["Max drawdown < 15%"],
+    max_steps=10,
 )
 result = app.invoke(state)
 ```
 
-### Streaming
+### Numeric Mode (backward compatible)
 
 ```python
-from synthetic_teleology.graph import collect_stream_events
+from synthetic_teleology.graph import GraphBuilder
+from synthetic_teleology.environments.numeric import NumericEnvironment
 
-stream = app.stream(initial_state, stream_mode="updates")
-events = collect_stream_events(stream)
-for ev in events:
-    print(f"[{ev['node']}] step={ev.get('step', '?')}")
+env = NumericEnvironment(dimensions=2, initial_state=(0.0, 0.0))
+
+app, state = (
+    GraphBuilder("numeric-agent")
+    .with_objective((5.0, 5.0))
+    .with_max_steps(20)
+    .with_environment(
+        perceive_fn=lambda: env.observe(),
+        act_fn=lambda p, s: p.actions[0] if p.size > 0 else None,
+        transition_fn=lambda a: env.step(a) if a else None,
+    )
+    .build()
+)
+result = app.invoke(state)
 ```
 
 ### Multi-Agent Coordination
@@ -123,27 +135,49 @@ for ev in events:
 from synthetic_teleology.graph import AgentConfig, build_multi_agent_graph
 
 configs = [
-    AgentConfig(agent_id="explorer", goal=goal_a, perceive_fn=obs_a, ...),
-    AgentConfig(agent_id="conservator", goal=goal_b, perceive_fn=obs_b, ...),
+    AgentConfig(
+        agent_id="growth", goal="Maximize revenue growth",
+        model=model, criteria=["Growth rate > 10%"],
+    ),
+    AgentConfig(
+        agent_id="retention", goal="Reduce churn below 5%",
+        model=model, criteria=["Churn < 5%"],
+    ),
 ]
-app = build_multi_agent_graph(configs, max_rounds=5)
+app = build_multi_agent_graph(configs, max_rounds=3)
 result = app.invoke({...})
 ```
 
 ## Examples
 
-### Conceptual
+### LLM Mode (NEW in v1.0)
 
-Core examples demonstrating the framework's building blocks:
+| # | File | Demonstrates |
+|---|------|-------------|
+| 11 | `conceptual/11_llm_quickstart.py` | LLM agent with natural language goals, multi-hypothesis planning |
+| 12 | `conceptual/12_llm_tools.py` | LLM agent with LangChain tools for actions |
+| 13 | `conceptual/13_llm_multi_agent.py` | Multi-agent LLM coordination with per-agent goals |
+| 14 | `conceptual/14_llm_metrics.py` | ReasoningQuality metric + LLM log analysis (no API key needed) |
+
+### Numeric Mode (Conceptual)
 
 | # | File | Demonstrates |
 |---|------|-------------|
 | 01 | `conceptual/01_basic_loop.py` | Basic teleological loop as StateGraph, `.invoke()`, inspecting state |
 | 02 | `conceptual/02_multi_agent.py` | Two agents with subgraphs + ConsensusNegotiator |
 | 03 | `conceptual/03_constraints.py` | SafetyChecker + BudgetChecker, streaming constraint checks |
+| 04 | `conceptual/04_evaluation_strategies.py` | NumericEvaluator, CompositeEvaluator, ReflectiveEvaluator (drift detection) |
+| 05 | `conceptual/05_goal_revision.py` | ThresholdUpdater, GradientUpdater, UncertaintyAwareUpdater, GoalUpdaterChain |
+| 06 | `conceptual/06_planning_strategies.py` | GreedyPlanner, StochasticPlanner, HierarchicalPlanner decomposition |
+| 07 | `conceptual/07_hierarchical_goals.py` | GoalTree, coherence validation, revision propagation, HierarchicalUpdater |
+| 08 | `conceptual/08_environments.py` | ResourceEnvironment (scarcity), ResearchEnvironment (knowledge synthesis) |
+| 09 | `conceptual/09_metrics_measurement.py` | All 7 teleological metrics, MetricsEngine, AgentLog, MetricsReport |
+| 10 | `conceptual/10_ethical_constraints.py` | EthicalChecker predicates, ConstraintPipeline (fail_fast), PolicyFilter |
 
 ```bash
-PYTHONPATH=src python examples/conceptual/01_basic_loop.py
+PYTHONPATH=src python examples/conceptual/14_llm_metrics.py   # no API key needed
+PYTHONPATH=src python examples/conceptual/11_llm_quickstart.py # requires API key
+PYTHONPATH=src python examples/conceptual/01_basic_loop.py     # numeric mode
 ```
 
 ### Production
@@ -159,7 +193,7 @@ Both agents run in simulated mode by default. Pass `--live` to use real APIs (re
 
 ## Metrics
 
-The framework implements 7 metrics from the Synthetic Teleology theory:
+The framework implements 8 metrics (7 from theory + 1 LLM-specific):
 
 | Metric | Abbreviation | Measures |
 |--------|-------------|----------|
@@ -170,6 +204,7 @@ The framework implements 7 metrics from the Synthetic Teleology theory:
 | Normative Fidelity | NF | Fraction of steps without constraint violations |
 | Innovation Yield | IY | Score improvement from novel actions |
 | Lyapunov Stability | LS | Score variance convergence over time |
+| **Reasoning Quality** | **RQ** | **Coherence and diversity of LLM reasoning traces (NEW)** |
 
 ## Testing
 
@@ -177,45 +212,46 @@ The framework implements 7 metrics from the Synthetic Teleology theory:
 PYTHONPATH=src .venv/bin/python -m pytest tests/ -v
 ```
 
-**449 tests** covering all modules (380 original + 69 graph layer).
+**498 tests** covering all modules (380 original + 69 graph + 49 LLM services).
+
+## Dual Mode Architecture
+
+The framework supports **two modes** detected automatically by the builder:
+
+| Mode | Trigger | Services | Requires API Key |
+|------|---------|----------|-----------------|
+| **LLM Mode** (new) | `.with_model(model)` | LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker | Yes |
+| **Numeric Mode** (legacy) | `.with_objective(values)` | NumericEvaluator, GreedyPlanner, ThresholdUpdater | No |
 
 ## Package Structure
 
 ```
 src/synthetic_teleology/
-├── graph/           # LangGraph teleological loop (NEW in v0.2.0)
-│   ├── state.py     # TeleologicalState TypedDict
-│   ├── nodes.py     # 8 node functions
-│   ├── edges.py     # Conditional routing
-│   ├── graph.py     # build_teleological_graph()
-│   ├── builder.py   # GraphBuilder fluent API
-│   ├── prebuilt.py  # One-liner constructors
-│   ├── multi_agent.py  # Multi-agent coordination
-│   └── streaming.py # Stream event formatters
-├── domain/          # Value objects, entities, aggregates, events, enums
-├── services/        # Evaluation, goal revision, planning, constraints, loop (legacy)
-├── agents/          # Base, teleological, BDI, LLM agents + factory
-├── environments/    # Numeric, resource, research, shared environments
-├── measurement/     # Collector, 7 metrics, engine, reports, 4 benchmarks
-├── infrastructure/  # EventBus, registry, config, serialization, LLM providers
-├── presentation/    # Console dashboard, plots, export (JSON/CSV/HTML)
-└── cli.py           # Command-line interface
-```
-
-## Legacy API
-
-The v0.1.0 `SyncAgenticLoop` and `AsyncAgenticLoop` classes still work but emit a `DeprecationWarning`. Prefer the LangGraph API:
-
-```python
-# Old (deprecated)
-from synthetic_teleology.services.loop import SyncAgenticLoop
-loop = SyncAgenticLoop(evaluator=..., planner=..., ...)
-result = loop.run(goal)
-
-# New (recommended)
-from synthetic_teleology.graph import GraphBuilder
-app, state = GraphBuilder("agent").with_objective(...).with_environment(...).build()
-result = app.invoke(state)
+├── graph/               # LangGraph teleological loop
+│   ├── state.py         # TeleologicalState TypedDict
+│   ├── nodes.py         # 8 node functions (LLM + numeric dual-mode)
+│   ├── edges.py         # Conditional routing
+│   ├── graph.py         # build_teleological_graph()
+│   ├── builder.py       # GraphBuilder fluent API (LLM-first + numeric)
+│   ├── prebuilt.py      # create_llm_agent(), create_numeric_agent()
+│   ├── multi_agent.py   # Multi-agent coordination (LLM + numeric)
+│   └── streaming.py     # Stream event formatters
+├── services/
+│   ├── llm_evaluation.py   # LLMEvaluator (structured output) — NEW
+│   ├── llm_planning.py     # LLMPlanner (multi-hypothesis) — NEW
+│   ├── llm_revision.py     # LLMReviser (LLM goal revision) — NEW
+│   ├── llm_constraints.py  # LLMConstraintChecker (soft reasoning) — NEW
+│   ├── evaluation.py       # NumericEvaluator, CompositeEvaluator, etc.
+│   ├── planning.py         # GreedyPlanner, StochasticPlanner, etc.
+│   ├── goal_revision.py    # ThresholdUpdater, GradientUpdater, etc.
+│   └── constraint_engine.py # ConstraintPipeline, PolicyFilter
+├── domain/              # Goal (text+vector), EvalSignal, Hypothesis, events
+├── environments/        # Numeric, resource, research, shared environments
+├── measurement/         # Collector, 8 metrics, engine, reports, benchmarks
+├── infrastructure/      # EventBus, registry, config, LangChain bridge
+├── agents/              # Base, teleological, BDI, LLM agents + factory
+├── presentation/        # Console dashboard, plots, export
+└── cli.py               # Command-line interface
 ```
 
 ## License

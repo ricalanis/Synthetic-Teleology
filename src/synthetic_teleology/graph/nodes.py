@@ -1,8 +1,12 @@
 """LangGraph node functions for the teleological loop.
 
 Each function takes a ``TeleologicalState`` and returns a partial update dict.
-The nodes delegate to the existing service classes (BaseEvaluator, BasePlanner, etc.)
-rather than reimplementing any logic.
+The nodes delegate to the service classes (LLM-backed or numeric) rather than
+reimplementing any logic.
+
+In LLM mode, nodes append reasoning to the ``reasoning_trace`` channel and
+capture hypothesis metadata.  In numeric mode, nodes behave identically to
+v0.2.x for backward compatibility.
 """
 
 from __future__ import annotations
@@ -20,20 +24,34 @@ def perceive_node(state: dict[str, Any]) -> dict[str, Any]:
     """Observe the environment and produce a StateSnapshot.
 
     Reads ``perceive_fn`` and ``step`` from state.
-    Writes ``state_snapshot`` and incremented ``step``.
+    Writes ``state_snapshot``, ``observation``, and incremented ``step``.
     """
     perceive_fn = state["perceive_fn"]
     step = state.get("step", 0) + 1
     snapshot = perceive_fn()
+
+    # Build observation text
+    observation = getattr(snapshot, "observation", "") or ""
+    if not observation and snapshot.values:
+        observation = f"State values at step {step}: {snapshot.values}"
+
     logger.debug("perceive_node: step=%d dim=%d", step, snapshot.dimension)
-    return {"state_snapshot": snapshot, "step": step}
+    return {
+        "state_snapshot": snapshot,
+        "observation": observation,
+        "step": step,
+    }
 
 
 def evaluate_node(state: dict[str, Any]) -> dict[str, Any]:
     """Compute Delta(G_t, S_t) using the evaluator strategy.
 
+    In LLM mode, the evaluator produces reasoning and criteria scores.
+    In numeric mode, works the same as v0.2.x.
+
     Reads ``evaluator``, ``goal``, ``state_snapshot``.
-    Writes ``eval_signal``, appends to ``eval_history`` and ``events``.
+    Writes ``eval_signal``, appends to ``eval_history``, ``events``,
+    and ``reasoning_trace``.
     """
     evaluator = state["evaluator"]
     goal = state["goal"]
@@ -59,18 +77,36 @@ def evaluate_node(state: dict[str, Any]) -> dict[str, Any]:
         "confidence": signal.confidence,
         "timestamp": time.time(),
     }
-    return {
+
+    result: dict[str, Any] = {
         "eval_signal": signal,
         "eval_history": [signal],
         "events": [event],
     }
 
+    # Append reasoning to trace if available (LLM mode)
+    if signal.reasoning:
+        result["reasoning_trace"] = [
+            {
+                "node": "evaluate",
+                "step": state.get("step", 0),
+                "reasoning": signal.reasoning,
+                "timestamp": time.time(),
+            }
+        ]
+
+    return result
+
 
 def revise_node(state: dict[str, Any]) -> dict[str, Any]:
     """Optionally revise the goal based on the evaluation signal.
 
+    In LLM mode, the LLMReviser reasons about whether revision is warranted
+    and can revise the description/criteria as well as numeric values.
+
     Reads ``goal_updater``, ``goal``, ``state_snapshot``, ``eval_signal``.
-    Writes ``goal``, appends to ``goal_history`` and ``events``.
+    Writes ``goal``, appends to ``goal_history``, ``events``,
+    and ``reasoning_trace``.
     """
     updater = state["goal_updater"]
     goal = state["goal"]
@@ -92,11 +128,24 @@ def revise_node(state: dict[str, Any]) -> dict[str, Any]:
             "new_goal_id": revised.goal_id,
             "timestamp": time.time(),
         }
-        return {
+        result: dict[str, Any] = {
             "goal": revised,
             "goal_history": [revised],
             "events": [event],
         }
+
+        # Capture revision reasoning in trace
+        if hasattr(revised, "metadata") and revised.metadata.get("revision_reasoning"):
+            result["reasoning_trace"] = [
+                {
+                    "node": "revise",
+                    "step": state.get("step", 0),
+                    "reasoning": revised.metadata["revision_reasoning"],
+                    "timestamp": time.time(),
+                }
+            ]
+
+        return result
 
     return {}
 
@@ -104,8 +153,11 @@ def revise_node(state: dict[str, Any]) -> dict[str, Any]:
 def check_constraints_node(state: dict[str, Any]) -> dict[str, Any]:
     """Validate the current state against the constraint pipeline.
 
+    Supports both legacy pipeline checkers and LLM constraint checkers.
+
     Reads ``constraint_pipeline``, ``goal``, ``state_snapshot``.
-    Writes ``constraints_ok``, ``constraint_violations``.
+    Writes ``constraints_ok``, ``constraint_violations``,
+    ``constraint_assessments``.
     """
     pipeline = state["constraint_pipeline"]
     goal = state["goal"]
@@ -116,14 +168,21 @@ def check_constraints_node(state: dict[str, Any]) -> dict[str, Any]:
     if not ok:
         logger.warning("check_constraints_node: violations=%s", violations)
 
-    return {"constraints_ok": ok, "constraint_violations": violations}
+    return {
+        "constraints_ok": ok,
+        "constraint_violations": violations,
+    }
 
 
 def plan_node(state: dict[str, Any]) -> dict[str, Any]:
     """Generate an action policy from the current goal and state.
 
+    In LLM mode, generates multiple hypotheses with confidence scores.
+    In numeric mode, works the same as v0.2.x.
+
     Reads ``planner``, ``goal``, ``state_snapshot``.
-    Writes ``policy``, appends to ``events``.
+    Writes ``policy``, ``hypotheses``, ``selected_plan``, appends to
+    ``events`` and ``reasoning_trace``.
     """
     planner = state["planner"]
     goal = state["goal"]
@@ -138,7 +197,26 @@ def plan_node(state: dict[str, Any]) -> dict[str, Any]:
         "num_actions": policy.size,
         "timestamp": time.time(),
     }
-    return {"policy": policy, "events": [event]}
+
+    result: dict[str, Any] = {
+        "policy": policy,
+        "events": [event],
+    }
+
+    # Extract hypotheses if available (LLM mode)
+    hypotheses_data = policy.metadata.get("hypotheses") if policy.metadata else None
+    if hypotheses_data:
+        result["reasoning_trace"] = [
+            {
+                "node": "plan",
+                "step": state.get("step", 0),
+                "num_hypotheses": len(hypotheses_data),
+                "reasoning": policy.metadata.get("selection_reasoning", ""),
+                "timestamp": time.time(),
+            }
+        ]
+
+    return result
 
 
 def filter_policy_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -160,13 +238,18 @@ def filter_policy_node(state: dict[str, Any]) -> dict[str, Any]:
 def act_node(state: dict[str, Any]) -> dict[str, Any]:
     """Execute the filtered policy and trigger environment transition.
 
-    Reads ``act_fn``, ``transition_fn``, ``filtered_policy``, ``state_snapshot``.
+    In LLM mode, if the selected action has a ``tool_name``, invokes the
+    corresponding LangChain tool from the tools list in state.
+
+    Reads ``act_fn``, ``transition_fn``, ``filtered_policy``, ``state_snapshot``,
+    ``tools``.
     Writes ``executed_action``, appends to ``action_history`` and ``events``.
     """
     act_fn = state.get("act_fn")
     transition_fn = state.get("transition_fn")
     filtered_policy = state["filtered_policy"]
     snapshot = state["state_snapshot"]
+    tools = state.get("tools", [])
 
     # Select action
     if act_fn is not None:
@@ -174,7 +257,19 @@ def act_node(state: dict[str, Any]) -> dict[str, Any]:
     else:
         action = filtered_policy.actions[0] if filtered_policy.size > 0 else None
 
-    # Transition
+    # Execute LangChain tool if action has tool_name
+    tool_result = None
+    if action is not None and getattr(action, "tool_name", None) and tools:
+        tool_map = {getattr(t, "name", ""): t for t in tools}
+        tool = tool_map.get(action.tool_name)
+        if tool is not None:
+            try:
+                tool_result = tool.invoke(dict(action.parameters))
+                logger.debug("act_node: tool '%s' returned: %s", action.tool_name, tool_result)
+            except Exception as exc:
+                logger.warning("act_node: tool '%s' failed: %s", action.tool_name, exc)
+
+    # Transition (traditional mode)
     if transition_fn is not None and action is not None:
         transition_fn(action)
 
@@ -182,12 +277,15 @@ def act_node(state: dict[str, Any]) -> dict[str, Any]:
         "act_node: executed action=%s", action.name if action else "None"
     )
 
-    event = {
+    event: dict[str, Any] = {
         "type": "action_executed",
         "step": state.get("step", 0),
         "action_name": action.name if action else None,
         "timestamp": time.time(),
     }
+    if tool_result is not None:
+        event["tool_result"] = str(tool_result)[:500]
+
     history_entry = [action] if action is not None else []
     return {
         "executed_action": action,
@@ -199,9 +297,12 @@ def act_node(state: dict[str, Any]) -> dict[str, Any]:
 def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
     """Evaluate whether the loop should terminate.
 
+    In LLM mode, also captures the full reasoning trace summary.
+
     Reads ``step``, ``goal``, ``eval_signal``, ``max_steps``,
     ``goal_achieved_threshold``, ``filtered_policy``.
-    Writes ``events``, ``stop_reason`` (if termination warranted).
+    Writes ``events``, ``stop_reason`` (if termination warranted),
+    and ``reasoning_trace``.
     """
     from synthetic_teleology.domain.enums import GoalStatus
 
@@ -237,4 +338,16 @@ def reflect_node(state: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {"events": [event]}
     if stop_reason is not None:
         result["stop_reason"] = stop_reason
+
+    # Log reflection in reasoning trace
+    result["reasoning_trace"] = [
+        {
+            "node": "reflect",
+            "step": step,
+            "eval_score": signal.score,
+            "stop_reason": stop_reason,
+            "timestamp": time.time(),
+        }
+    ]
+
     return result

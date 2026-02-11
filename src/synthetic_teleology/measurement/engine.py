@@ -16,11 +16,11 @@ Usage::
 from __future__ import annotations
 
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 from synthetic_teleology.measurement.collector import AgentLog
-from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
+from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.lyapunov_stability import LyapunovStability

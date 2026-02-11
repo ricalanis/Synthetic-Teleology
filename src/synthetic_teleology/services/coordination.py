@@ -32,8 +32,9 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from itertools import combinations
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 

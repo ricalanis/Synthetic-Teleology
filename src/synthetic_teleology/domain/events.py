@@ -11,12 +11,12 @@ originating entity or component.
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from .enums import AgentState, NegotiationStrategy, RevisionReason
 from .values import ActionSpec, EvalSignal, GoalRevision, ObjectiveVector, PolicySpec
-
 
 # ---------------------------------------------------------------------------
 # Base event

@@ -31,10 +31,10 @@ import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from synthetic_teleology.domain.entities import Goal
-from synthetic_teleology.domain.enums import AgentState, GoalStatus
+from synthetic_teleology.domain.enums import GoalStatus
 from synthetic_teleology.domain.values import (
     ActionSpec,
     EvalSignal,
@@ -47,11 +47,6 @@ from synthetic_teleology.services.goal_revision import BaseGoalUpdater
 from synthetic_teleology.services.planning import BasePlanner
 
 if TYPE_CHECKING:
-    from synthetic_teleology.agents.base import BaseAgent
-    from synthetic_teleology.domain.aggregates import ConstraintSet
-    from synthetic_teleology.domain.events import DomainEvent, LoopStepCompleted
-    from synthetic_teleology.environments.base import BaseEnvironment
-    from synthetic_teleology.infrastructure.config import LoopConfig
     from synthetic_teleology.infrastructure.event_bus import AsyncEventBus, EventBus
 
 logger = logging.getLogger(__name__)

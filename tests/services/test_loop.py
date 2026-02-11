@@ -4,25 +4,21 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
-from synthetic_teleology.domain.enums import Direction, GoalStatus
+from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     ActionSpec,
-    EvalSignal,
     ObjectiveVector,
     PolicySpec,
     StateSnapshot,
 )
-from synthetic_teleology.domain.entities import Goal
-from synthetic_teleology.services.evaluation import NumericEvaluator
-from synthetic_teleology.services.goal_revision import ThresholdUpdater
-from synthetic_teleology.services.planning import GreedyPlanner
 from synthetic_teleology.services.constraint_engine import (
     ConstraintPipeline,
-    PolicyFilter,
 )
+from synthetic_teleology.services.evaluation import NumericEvaluator
+from synthetic_teleology.services.goal_revision import ThresholdUpdater
 from synthetic_teleology.services.loop import RunResult, StopReason, SyncAgenticLoop
+from synthetic_teleology.services.planning import GreedyPlanner
 
 
 def _build_loop(

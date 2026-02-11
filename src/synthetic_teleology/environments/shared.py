@@ -18,7 +18,6 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from synthetic_teleology.domain.enums import StateSource
 from synthetic_teleology.domain.values import ActionSpec, StateSnapshot
 from synthetic_teleology.environments.base import BaseEnvironment
 from synthetic_teleology.infrastructure.event_bus import EventBus

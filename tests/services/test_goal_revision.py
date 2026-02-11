@@ -6,16 +6,16 @@ import time
 
 import pytest
 
-from synthetic_teleology.domain.enums import Direction, StateSource
+from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     EvalSignal,
     ObjectiveVector,
     StateSnapshot,
 )
-from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.services.goal_revision import (
-    GradientUpdater,
     GoalUpdaterChain,
+    GradientUpdater,
     ThresholdUpdater,
 )
 

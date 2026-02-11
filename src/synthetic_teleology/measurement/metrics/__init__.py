@@ -12,14 +12,16 @@ Available metrics
 - :class:`NormativeFidelity` -- adherence to constraints
 - :class:`InnovationYield` -- diversity and novelty of actions
 - :class:`LyapunovStability` -- convergence stability of evaluation scores
+- :class:`ReasoningQuality` -- coherence of LLM reasoning traces
 """
 
-from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
+from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.lyapunov_stability import LyapunovStability
 from synthetic_teleology.measurement.metrics.normative_fidelity import NormativeFidelity
+from synthetic_teleology.measurement.metrics.reasoning_quality import ReasoningQuality
 from synthetic_teleology.measurement.metrics.reflective_efficiency import ReflectiveEfficiency
 from synthetic_teleology.measurement.metrics.teleological_coherence import TeleologicalCoherence
 
@@ -31,6 +33,7 @@ __all__ = [
     "InnovationYield",
     "LyapunovStability",
     "NormativeFidelity",
+    "ReasoningQuality",
     "ReflectiveEfficiency",
     "TeleologicalCoherence",
 ]

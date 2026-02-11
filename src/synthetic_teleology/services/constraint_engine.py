@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import ConstraintType

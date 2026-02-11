@@ -6,6 +6,11 @@ Re-exports all public domain types so that consumers can write::
 """
 
 # -- Enumerations -------------------------------------------------------------
+# -- Aggregates ---------------------------------------------------------------
+from .aggregates import AgentIdentity, ConstraintSet, GoalTree
+
+# -- Entities -----------------------------------------------------------------
+from .entities import Constraint, Goal
 from .enums import (
     AgentState,
     ConstraintType,
@@ -16,23 +21,6 @@ from .enums import (
     RevisionReason,
     StateSource,
 )
-
-# -- Value Objects ------------------------------------------------------------
-from .values import (
-    ActionSpec,
-    ConstraintSpec,
-    EvalSignal,
-    GoalRevision,
-    ObjectiveVector,
-    PolicySpec,
-    StateSnapshot,
-)
-
-# -- Entities -----------------------------------------------------------------
-from .entities import Constraint, Goal
-
-# -- Aggregates ---------------------------------------------------------------
-from .aggregates import AgentIdentity, ConstraintSet, GoalTree
 
 # -- Domain Events ------------------------------------------------------------
 from .events import (
@@ -63,6 +51,17 @@ from .exceptions import (
     NegotiationDeadlock,
     PlanningError,
     SyntheticTeleologyError,
+)
+
+# -- Value Objects ------------------------------------------------------------
+from .values import (
+    ActionSpec,
+    ConstraintSpec,
+    EvalSignal,
+    GoalRevision,
+    ObjectiveVector,
+    PolicySpec,
+    StateSnapshot,
 )
 
 __all__ = [

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from synthetic_teleology.agents.factory import AgentBuilder, AgentFactory
 from synthetic_teleology.agents.teleological import TeleologicalAgent
-from synthetic_teleology.domain.aggregates import ConstraintSet
 from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.domain.enums import AgentState, ConstraintType, Direction
 from synthetic_teleology.domain.values import (

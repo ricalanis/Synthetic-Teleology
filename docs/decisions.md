@@ -1,5 +1,58 @@
 # Architecture Decisions
 
+## 2026-02-10: LLM-First Probabilistic Rewrite (v1.0.0)
+
+### Decision: Transform Every Node from Numeric Computation to LLM-Driven Reasoning
+- **Context:** v0.2.x correctly implements the Haidemariam (2026) loop structure but reasoning at each step is mechanical math (Euclidean distance, greedy action selection, boolean predicates). The goal is agents that reason, not compute.
+- **Choice:** Rewrite all graph node implementations to delegate to LLM-backed services by default, while preserving numeric mode as backward-compatible fallback. The builder auto-detects mode based on `with_model()` vs `with_objective()`.
+- **Rationale:** LLMs bring genuine probabilistic reasoning: multi-hypothesis planning with confidence scores, soft constraint checking with severity, chain-of-thought evaluation, and reflective goal revision. The graph topology stays identical — only node implementations change.
+
+### Decision: LangChain `BaseChatModel` as the Universal LLM Interface
+- **Context:** v0.2.x had a custom `LLMProvider` abstraction with Anthropic/OpenAI/HuggingFace/Generic providers.
+- **Choice:** Use `langchain_core.language_models.BaseChatModel` directly. Deprecate custom providers with `DeprecationWarning`. Provide `LLMProviderToChatModel` bridge for migration.
+- **Rationale:** LangChain's model ecosystem (ChatAnthropic, ChatOpenAI, ChatOllama, ChatGoogleGenerativeAI, etc.) is battle-tested and maintained. `with_structured_output()` gives reliable Pydantic schema parsing. No need to maintain our own provider layer.
+
+### Decision: Pydantic Schemas for Structured LLM Output
+- **Context:** LLM nodes need reliable structured responses (scores, reasoning, actions, constraint assessments).
+- **Choice:** Define Pydantic `BaseModel` schemas (`EvaluationOutput`, `PlanningOutput`, `RevisionOutput`, `ConstraintCheckOutput`) and use `model.with_structured_output(Schema)` for type-safe LLM responses.
+- **Rationale:** Structured output via tool-calling/JSON mode is far more reliable than regex parsing. Pydantic validation catches malformed responses. Schemas serve as both prompt documentation and runtime contracts.
+
+### Decision: Multi-Hypothesis Planning with Softmax Selection
+- **Context:** Numeric planner picks a single greedy action. LLM reasoning should explore multiple approaches.
+- **Choice:** `LLMPlanner` generates N candidate hypotheses, each with confidence + reasoning + risk assessment. Softmax over confidences produces a probability distribution for `PolicySpec`.
+- **Rationale:** Multiple hypotheses with probabilistic selection enables exploration vs exploitation tradeoff. Users control diversity via `num_hypotheses` and `temperature`. Metadata preserves all hypotheses for observability.
+
+### Decision: Natural Language Goals with Optional Numeric Backing
+- **Context:** v0.2.x goals are `ObjectiveVector` (float tuples with direction enums). v1.0 goals should be text-first.
+- **Choice:** `Goal.description` becomes the primary representation. `success_criteria: list[str]` defines what the LLM evaluates against. `objective: ObjectiveVector | None` remains optional for hybrid use cases.
+- **Rationale:** Text goals align with how humans think about objectives. Success criteria give the LLM evaluator clear checkpoints. Numeric backing is still available for environments that produce scalar observations.
+
+### Decision: Soft Constraint Reasoning (Not Boolean Predicates)
+- **Context:** v0.2.x constraints are `Callable[..., bool]` predicates — either satisfied or not.
+- **Choice:** `LLMConstraintChecker` evaluates each constraint with `severity: float [0,1]`, `reasoning: str`, and `suggested_mitigation: str`. Overall safety is a reasoned judgment, not a conjunction of booleans.
+- **Rationale:** Real-world constraints have nuance. "Stay within budget" might be 98% satisfied — an LLM can reason about whether the 2% overrun is acceptable. Severity scores enable graduated responses instead of hard stops.
+
+### Decision: ReasoningQuality as 8th Metric
+- **Context:** 7 metrics from the paper measure numeric agent behavior (persistence, coherence, efficiency, etc.). None measure the quality of LLM reasoning itself.
+- **Choice:** Add `ReasoningQuality` metric: composite of presence ratio (% of steps with reasoning), diversity ratio (unique reasoning / total), and average length ratio (normalized reasoning depth).
+- **Rationale:** LLM agents that produce repetitive, absent, or shallow reasoning should score lower. This metric differentiates between agents that genuinely reason and those that produce boilerplate. Numeric-mode agents score 0.0 (no reasoning traces).
+
+### Decision: Dual-Mode Architecture (LLM + Numeric)
+- **Context:** ~380 existing tests and 10 examples depend on numeric mode. Breaking backward compatibility would be disruptive.
+- **Choice:** `GraphBuilder` detects mode automatically: `with_model()` → LLM mode (LLMEvaluator, LLMPlanner, LLMReviser, LLMConstraintChecker), `with_objective()` → numeric mode (NumericEvaluator, GreedyPlanner, ThresholdUpdater). Both use the same graph topology.
+- **Rationale:** Zero migration cost for existing users. New users get LLM mode by default. The builder's `build()` method wires the correct services based on which configuration methods were called.
+
+---
+
+## 2026-02-10: Expanded Conceptual Examples (v0.2.2)
+
+### Decision: Align Examples 1:1 with Paper Concepts
+- **Context:** The 3 existing conceptual examples covered basic loop, multi-agent, and constraints — but left ~28 major concepts from Haidemariam (2026) undemonstrated (reflective evaluation, gradient goal revision, hierarchical goals, stochastic planning, all 7 metrics, resource/research environments, ethical constraints).
+- **Choice:** Add 7 new examples (04–10) that comprehensively demonstrate every major theoretical concept. No new framework code — examples use existing classes.
+- **Rationale:** Examples are the primary learning path for users. Covering all paper concepts ensures the framework's full capabilities are discoverable. Each example focuses on one service area (evaluation, revision, planning, goals, environments, metrics, constraints) and shows how to swap strategies via GraphBuilder.
+
+---
+
 ## 2026-02-10: Example Restructuring (v0.2.1)
 
 ### Decision: Separate Conceptual vs Production Examples

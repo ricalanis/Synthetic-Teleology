@@ -11,12 +11,11 @@ directly.
 
 from __future__ import annotations
 
-from typing import Iterator, Sequence
+from collections.abc import Iterator, Sequence
 
 from .entities import Constraint, Goal
-from .enums import ConstraintType, GoalStatus
+from .enums import ConstraintType
 from .values import GoalRevision
-
 
 # ---------------------------------------------------------------------------
 # GoalTree

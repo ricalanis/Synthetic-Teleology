@@ -21,8 +21,8 @@ from synthetic_teleology.measurement.collector import (
     EventCollector,
 )
 from synthetic_teleology.measurement.engine import MetricsEngine
-from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
+from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.lyapunov_stability import LyapunovStability

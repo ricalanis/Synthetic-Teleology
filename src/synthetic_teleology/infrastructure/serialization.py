@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, fields as dc_fields, is_dataclass
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
+from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.domain.enums import (
     ConstraintType,
     Direction,
@@ -34,7 +35,6 @@ from synthetic_teleology.domain.values import (
     PolicySpec,
     StateSnapshot,
 )
-from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.infrastructure.config import (
     AgentConfig,
     BenchmarkConfig,

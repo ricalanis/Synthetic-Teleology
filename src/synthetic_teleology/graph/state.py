@@ -16,6 +16,7 @@ from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.values import (
     ActionSpec,
     EvalSignal,
+    Hypothesis,
     PolicySpec,
     StateSnapshot,
 )
@@ -38,6 +39,7 @@ class TeleologicalState(TypedDict, total=False):
     * **Constraints** -- result of the constraint check node.
     * **Injected strategies** -- set once at invocation, read by nodes.
     * **Environment callables** -- functions for world interaction.
+    * **LLM configuration** -- model, tools, hypothesis count.
     * **Accumulation channels** -- append-reducers for history.
     * **Extensibility** -- free-form metadata dict.
     """
@@ -50,8 +52,11 @@ class TeleologicalState(TypedDict, total=False):
 
     # -- Core teleological state (mutated per iteration) ---------------------
     goal: Goal
+    observation: str                               # NEW: natural language state description
     state_snapshot: StateSnapshot
     eval_signal: EvalSignal
+    hypotheses: list[Hypothesis]                   # NEW: multi-hypothesis plans
+    selected_plan: Hypothesis | None         # NEW: chosen plan
     policy: PolicySpec
     filtered_policy: PolicySpec
     executed_action: ActionSpec | None
@@ -59,6 +64,7 @@ class TeleologicalState(TypedDict, total=False):
     # -- Constraints ---------------------------------------------------------
     constraints_ok: bool
     constraint_violations: list[str]
+    constraint_assessments: list[dict]             # NEW: soft constraint reasoning
 
     # -- Injected strategies (set once, read by nodes) -----------------------
     evaluator: BaseEvaluator
@@ -66,6 +72,11 @@ class TeleologicalState(TypedDict, total=False):
     planner: BasePlanner
     constraint_pipeline: ConstraintPipeline
     policy_filter: PolicyFilter
+
+    # -- LLM configuration (set once) ----------------------------------------
+    model: Any                                     # NEW: BaseChatModel
+    tools: list[Any]                               # NEW: LangChain tools
+    num_hypotheses: int                            # NEW: hypothesis count
 
     # -- Environment callables -----------------------------------------------
     perceive_fn: Callable
@@ -77,6 +88,7 @@ class TeleologicalState(TypedDict, total=False):
     goal_history: Annotated[list, operator.add]
     eval_history: Annotated[list, operator.add]
     action_history: Annotated[list, operator.add]
+    reasoning_trace: Annotated[list, operator.add]  # NEW: all LLM reasoning
 
     # -- Extensibility -------------------------------------------------------
     metadata: dict[str, Any]

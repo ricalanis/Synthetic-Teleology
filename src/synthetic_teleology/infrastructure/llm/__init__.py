@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +142,10 @@ class LLMResponse:
 class LLMProvider(ABC):
     """Abstract base class for LLM backend integrations.
 
-    Concrete providers (Anthropic, OpenAI, etc.) subclass this and implement
-    the ``generate`` and ``generate_async`` methods.
+    .. deprecated:: 1.0.0
+        Use ``langchain_core.language_models.BaseChatModel`` directly instead.
+        See :class:`synthetic_teleology.infrastructure.llm.langchain_bridge.LLMProviderToChatModel`
+        for a bridge from legacy providers to LangChain.
 
     Usage::
 
@@ -150,6 +153,18 @@ class LLMProvider(ABC):
         config = LLMConfig(model="claude-opus-4-6", temperature=0.3)
         response = provider.generate(messages, config)
     """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        import warnings
+
+        super().__init_subclass__(**kwargs)
+        warnings.warn(
+            f"{cls.__name__} inherits from LLMProvider which is deprecated in v1.0. "
+            "Use langchain_core.language_models.BaseChatModel instead. "
+            "See synthetic_teleology.infrastructure.llm.langchain_bridge for migration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     @property
     @abstractmethod

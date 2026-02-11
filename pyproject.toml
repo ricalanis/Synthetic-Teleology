@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synthetic-teleology"
-version = "0.2.0"
-description = "LangGraph toolkit for goal-directed agents implementing Synthetic Teleology (Haidemariam, 2026)"
+version = "1.0.0"
+description = "LLM-first LangGraph toolkit for goal-directed agents implementing Synthetic Teleology (Haidemariam, 2026)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.24", "langgraph>=0.2", "langchain-core>=0.3"]
+dependencies = ["numpy>=1.24", "langgraph>=0.2", "langchain-core>=0.3", "pydantic>=2.0"]
 
 [project.optional-dependencies]
 llm-anthropic = ["anthropic>=0.40"]
@@ -20,7 +20,7 @@ llm-openai-lc = ["langchain-openai>=0.3"]
 llm-generic = ["httpx>=0.27"]
 viz = ["matplotlib>=3.8", "rich>=13.0"]
 all = [
-    "synthetic-teleology[llm-anthropic,llm-openai,llm-huggingface,llm-generic,viz]",
+    "synthetic-teleology[llm-anthropic,llm-openai,llm-huggingface,llm-anthropic-lc,llm-openai-lc,llm-generic,viz]",
 ]
 dev = [
     "pytest>=8.0",

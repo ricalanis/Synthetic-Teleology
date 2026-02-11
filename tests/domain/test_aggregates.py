@@ -4,23 +4,21 @@ from __future__ import annotations
 
 import pytest
 
+from synthetic_teleology.domain.aggregates import (
+    AgentIdentity,
+    ConstraintSet,
+    GoalTree,
+)
+from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.domain.enums import (
     ConstraintType,
     Direction,
-    GoalStatus,
 )
 from synthetic_teleology.domain.values import (
     ConstraintSpec,
     GoalRevision,
     ObjectiveVector,
 )
-from synthetic_teleology.domain.entities import Constraint, Goal
-from synthetic_teleology.domain.aggregates import (
-    AgentIdentity,
-    ConstraintSet,
-    GoalTree,
-)
-
 
 # ===================================================================== #
 #  GoalTree                                                               #

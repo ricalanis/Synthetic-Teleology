@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark
 from synthetic_teleology.measurement.benchmarks.suite import BenchmarkSuite
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry
 from synthetic_teleology.measurement.engine import MetricsEngine
-from synthetic_teleology.measurement.metrics.base import MetricResult
 from synthetic_teleology.measurement.report import MetricsReport
 
 

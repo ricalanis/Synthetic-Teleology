@@ -16,7 +16,6 @@ from typing import Any
 
 from synthetic_teleology.measurement.report import MetricsReport
 
-
 # ---------------------------------------------------------------------------
 # JSON
 # ---------------------------------------------------------------------------
@@ -275,7 +274,7 @@ def export_html(report: MetricsReport, path: str) -> None:
     from synthetic_teleology import __version__
 
     iso_ts = datetime.datetime.fromtimestamp(
-        report.timestamp, tz=datetime.timezone.utc
+        report.timestamp, tz=datetime.UTC
     ).isoformat()
 
     # Build metric rows

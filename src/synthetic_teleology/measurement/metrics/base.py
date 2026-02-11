@@ -19,7 +19,6 @@ from typing import Any
 
 from synthetic_teleology.measurement.collector import AgentLog
 
-
 # ---------------------------------------------------------------------------
 # Result value object
 # ---------------------------------------------------------------------------

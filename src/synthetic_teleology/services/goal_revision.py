@@ -28,9 +28,9 @@ LLMGoalEditor
 from __future__ import annotations
 
 import logging
-import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -38,8 +38,6 @@ from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import Direction, RevisionReason
 from synthetic_teleology.domain.values import (
     EvalSignal,
-    GoalRevision,
-    ObjectiveVector,
     StateSnapshot,
 )
 

@@ -7,7 +7,6 @@ import pytest
 
 from synthetic_teleology.domain.values import ActionSpec, StateSnapshot
 from synthetic_teleology.environments.numeric import NumericEnvironment
-from synthetic_teleology.infrastructure.event_bus import EventBus
 
 
 class TestNumericEnvironment:

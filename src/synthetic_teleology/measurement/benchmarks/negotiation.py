@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -22,13 +21,12 @@ from synthetic_teleology.agents.factory import AgentFactory
 from synthetic_teleology.agents.teleological import TeleologicalAgent
 from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import Direction
-from synthetic_teleology.domain.values import ActionSpec, EvalSignal, ObjectiveVector
+from synthetic_teleology.domain.values import ActionSpec, ObjectiveVector
 from synthetic_teleology.environments.shared import SharedEnvironment
 from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry, EventCollector
 from synthetic_teleology.measurement.engine import MetricsEngine
-from synthetic_teleology.measurement.metrics.base import MetricResult
 from synthetic_teleology.measurement.report import MetricsReport
 
 logger = logging.getLogger(__name__)

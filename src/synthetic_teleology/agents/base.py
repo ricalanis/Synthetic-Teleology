@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from synthetic_teleology.domain.aggregates import AgentIdentity, ConstraintSet
 from synthetic_teleology.domain.entities import Goal

@@ -6,13 +6,13 @@ import time
 
 import pytest
 
+from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     ActionSpec,
     ObjectiveVector,
     StateSnapshot,
 )
-from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.services.planning import (
     GreedyPlanner,
     StochasticPlanner,

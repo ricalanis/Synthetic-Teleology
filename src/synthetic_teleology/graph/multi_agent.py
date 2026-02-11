@@ -1,7 +1,8 @@
 """Multi-agent coordination as a LangGraph.
 
 Builds a coordinator graph that runs per-agent teleological subgraphs
-and negotiates shared objectives using the existing negotiation strategies.
+and negotiates shared objectives using either numeric averaging or
+LLM-powered negotiation.
 
 Note: No ``from __future__ import annotations`` — LangGraph needs runtime
 type resolution for TypedDict schemas.
@@ -11,7 +12,7 @@ import logging
 import operator
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -25,11 +26,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AgentConfig:
-    """Configuration for one agent in a multi-agent graph."""
+    """Configuration for one agent in a multi-agent graph.
+
+    In LLM mode, set ``goal`` as a text description and provide ``model``,
+    ``tools``, ``criteria``, and ``constraints``.
+    In numeric mode, set ``goal`` as a ``Goal`` entity with an objective vector.
+    """
 
     agent_id: str
-    goal: Goal
-    perceive_fn: Callable
+    goal: Goal | str = ""
+    model: Any = None                              # NEW: per-agent LangChain model override
+    tools: list[Any] = field(default_factory=list)  # NEW: per-agent tools
+    criteria: list[str] = field(default_factory=list)  # NEW: per-agent criteria
+    constraints: list[str] = field(default_factory=list)  # NEW: per-agent constraints
+    perceive_fn: Callable | None = None
     transition_fn: Callable | None = None
     act_fn: Callable | None = None
     max_steps_per_round: int = 10
@@ -46,14 +56,20 @@ class MultiAgentState(TypedDict, total=False):
     policy_filter: Any
     goal_achieved_threshold: float
 
+    # LLM configuration
+    model: Any                                     # NEW: shared model for negotiation
+    tools: list[Any]                               # NEW: shared tools
+
     # Coordination
     agent_results: dict[str, Any]
-    shared_objective: ObjectiveVector
+    shared_objective: ObjectiveVector | None
+    shared_direction: str                          # NEW: LLM negotiation output
     negotiation_round: int
     max_rounds: int
 
     # Accumulation
     events: Annotated[list, operator.add]
+    reasoning_trace: Annotated[list, operator.add]  # NEW: negotiation reasoning
 
 
 def _make_agent_node(
@@ -63,66 +79,129 @@ def _make_agent_node(
     """Create a node function that runs a teleological subgraph for one agent."""
 
     def agent_node(state: dict[str, Any]) -> dict[str, Any]:
-        from synthetic_teleology.graph.graph import build_teleological_graph
+        # Determine if this agent should run in LLM mode
+        agent_model = config.model or state.get("model")
+        is_llm = agent_model is not None and isinstance(config.goal, str)
 
-        shared_objective = state.get("shared_objective")
-        agent_goal = config.goal
-
-        # Apply shared objective if available from negotiation
-        if shared_objective is not None and agent_goal.objective is not None:
-            agent_goal = Goal(
-                name=agent_goal.name,
-                objective=shared_objective,
-            )
-
-        sub_app = build_teleological_graph()
-        sub_state = {
-            "step": 0,
-            "max_steps": config.max_steps_per_round,
-            "goal_achieved_threshold": state.get("goal_achieved_threshold", 0.9),
-            "goal": agent_goal,
-            "evaluator": state["evaluator"],
-            "goal_updater": state["goal_updater"],
-            "planner": state["planner"],
-            "constraint_pipeline": state["constraint_pipeline"],
-            "policy_filter": state["policy_filter"],
-            "perceive_fn": config.perceive_fn,
-            "act_fn": config.act_fn,
-            "transition_fn": config.transition_fn,
-            "events": [],
-            "goal_history": [],
-            "eval_history": [],
-            "action_history": [],
-            "metadata": {},
-        }
-
-        result = sub_app.invoke(sub_state)
-
-        # Store agent result
-        agent_results = dict(state.get("agent_results", {}))
-        agent_results[config.agent_id] = {
-            "final_goal": result.get("goal"),
-            "eval_signal": result.get("eval_signal"),
-            "steps": result.get("step", 0),
-            "stop_reason": result.get("stop_reason"),
-            "events": result.get("events", []),
-        }
-
-        event = {
-            "type": "agent_round_completed",
-            "agent_id": config.agent_id,
-            "steps": result.get("step", 0),
-            "eval_score": result["eval_signal"].score if result.get("eval_signal") else 0.0,
-            "timestamp": time.time(),
-        }
-
-        return {
-            "agent_results": agent_results,
-            "events": [event],
-        }
+        if is_llm:
+            return _run_llm_agent(config, agent_key, state, agent_model)
+        return _run_numeric_agent(config, agent_key, state)
 
     agent_node.__name__ = f"agent_{agent_key}"
     return agent_node
+
+
+def _run_llm_agent(
+    config: AgentConfig,
+    agent_key: str,
+    state: dict[str, Any],
+    model: Any,
+) -> dict[str, Any]:
+    """Run an LLM-mode agent subgraph."""
+    from synthetic_teleology.graph.builder import GraphBuilder
+
+    goal_text = config.goal if isinstance(config.goal, str) else config.goal.description
+
+    builder = (
+        GraphBuilder(config.agent_id)
+        .with_model(model)
+        .with_goal(goal_text, criteria=config.criteria)
+        .with_max_steps(config.max_steps_per_round)
+        .with_goal_achieved_threshold(state.get("goal_achieved_threshold", 0.9))
+    )
+
+    if config.tools:
+        builder.with_tools(*config.tools)
+    if config.constraints:
+        builder.with_constraints(*config.constraints)
+    if config.perceive_fn is not None:
+        builder.with_environment(
+            perceive_fn=config.perceive_fn,
+            act_fn=config.act_fn,
+            transition_fn=config.transition_fn,
+        )
+
+    sub_app, sub_state = builder.build()
+    result = sub_app.invoke(sub_state)
+
+    return _collect_agent_result(config, state, result)
+
+
+def _run_numeric_agent(
+    config: AgentConfig,
+    agent_key: str,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    """Run a numeric-mode agent subgraph."""
+    from synthetic_teleology.graph.graph import build_teleological_graph
+
+    shared_objective = state.get("shared_objective")
+    agent_goal = config.goal if isinstance(config.goal, Goal) else Goal(
+        name=config.agent_id,
+        description=str(config.goal),
+    )
+
+    # Apply shared objective if available from negotiation
+    if shared_objective is not None and agent_goal.objective is not None:
+        agent_goal = Goal(
+            name=agent_goal.name,
+            objective=shared_objective,
+        )
+
+    sub_app = build_teleological_graph()
+    sub_state = {
+        "step": 0,
+        "max_steps": config.max_steps_per_round,
+        "goal_achieved_threshold": state.get("goal_achieved_threshold", 0.9),
+        "goal": agent_goal,
+        "evaluator": state["evaluator"],
+        "goal_updater": state["goal_updater"],
+        "planner": state["planner"],
+        "constraint_pipeline": state["constraint_pipeline"],
+        "policy_filter": state["policy_filter"],
+        "perceive_fn": config.perceive_fn,
+        "act_fn": config.act_fn,
+        "transition_fn": config.transition_fn,
+        "events": [],
+        "goal_history": [],
+        "eval_history": [],
+        "action_history": [],
+        "reasoning_trace": [],
+        "metadata": {},
+    }
+
+    result = sub_app.invoke(sub_state)
+    return _collect_agent_result(config, state, result)
+
+
+def _collect_agent_result(
+    config: AgentConfig,
+    state: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Collect agent results into the multi-agent state."""
+    agent_results = dict(state.get("agent_results", {}))
+    agent_results[config.agent_id] = {
+        "final_goal": result.get("goal"),
+        "eval_signal": result.get("eval_signal"),
+        "steps": result.get("step", 0),
+        "stop_reason": result.get("stop_reason"),
+        "events": result.get("events", []),
+        "reasoning_trace": result.get("reasoning_trace", []),
+    }
+
+    event = {
+        "type": "agent_round_completed",
+        "agent_id": config.agent_id,
+        "steps": result.get("step", 0),
+        "eval_score": result["eval_signal"].score if result.get("eval_signal") else 0.0,
+        "timestamp": time.time(),
+    }
+
+    return {
+        "agent_results": agent_results,
+        "events": [event],
+    }
 
 
 def _negotiate_node(negotiator: BaseNegotiator) -> Callable[[dict[str, Any]], dict[str, Any]]:

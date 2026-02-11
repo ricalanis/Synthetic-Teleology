@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
 
-from synthetic_teleology.domain.enums import Direction, StateSource, ConstraintType
+from synthetic_teleology.domain.enums import ConstraintType, Direction, StateSource
 from synthetic_teleology.domain.values import (
-    ObjectiveVector,
-    EvalSignal,
-    ConstraintSpec,
     ActionSpec,
+    ConstraintSpec,
+    EvalSignal,
+    GoalRevision,
+    ObjectiveVector,
     PolicySpec,
     StateSnapshot,
-    GoalRevision,
 )
-
 
 # ===================================================================== #
 #  ObjectiveVector                                                        #

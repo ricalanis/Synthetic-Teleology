@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+from synthetic_teleology.domain.aggregates import ConstraintSet
+from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.domain.enums import (
     ConstraintType,
     Direction,
@@ -17,20 +19,15 @@ from synthetic_teleology.domain.values import (
     ConstraintSpec,
     EvalSignal,
     ObjectiveVector,
-    PolicySpec,
     StateSnapshot,
 )
-from synthetic_teleology.domain.entities import Constraint, Goal
-from synthetic_teleology.domain.aggregates import ConstraintSet, GoalTree
 from synthetic_teleology.infrastructure.event_bus import EventBus
+from synthetic_teleology.services.constraint_engine import (
+    ConstraintPipeline,
+)
 from synthetic_teleology.services.evaluation import NumericEvaluator
 from synthetic_teleology.services.goal_revision import ThresholdUpdater
 from synthetic_teleology.services.planning import GreedyPlanner
-from synthetic_teleology.services.constraint_engine import (
-    ConstraintPipeline,
-    SafetyChecker,
-)
-
 
 # ---------------------------------------------------------------------------
 # Value-object fixtures

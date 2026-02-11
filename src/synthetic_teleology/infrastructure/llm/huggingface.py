@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from synthetic_teleology.infrastructure.llm import (
     LLMConfig,
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 # Attempt imports at module level
 try:
-    import transformers as _transformers
     import torch as _torch
+    import transformers as _transformers
 
     _HAS_TRANSFORMERS = True
 except ImportError:

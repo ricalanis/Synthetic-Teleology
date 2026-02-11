@@ -64,6 +64,7 @@ class RevisionReason(Enum):
     HIERARCHICAL_PROPAGATION = "hierarchical_propagation"
     UNCERTAINTY_REDUCTION = "uncertainty_reduction"
     LLM_CRITIQUE = "llm_critique"
+    EVALUATION_FEEDBACK = "evaluation_feedback"
     EXTERNAL_DIRECTIVE = "external_directive"
 
 

@@ -8,7 +8,7 @@ from synthetic_teleology.domain.events import GoalRevised
 from synthetic_teleology.domain.values import GoalRevision
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
-from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
+from synthetic_teleology.measurement.metrics.base import MetricResult
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.lyapunov_stability import LyapunovStability

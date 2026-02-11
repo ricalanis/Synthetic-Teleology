@@ -14,7 +14,8 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from synthetic_teleology.infrastructure.llm import (
     LLMConfig,

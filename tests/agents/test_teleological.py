@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from synthetic_teleology.agents.teleological import TeleologicalAgent
@@ -15,7 +13,6 @@ from synthetic_teleology.domain.values import (
     EvalSignal,
     ObjectiveVector,
     PolicySpec,
-    StateSnapshot,
 )
 from synthetic_teleology.environments.numeric import NumericEnvironment
 from synthetic_teleology.infrastructure.event_bus import EventBus

@@ -12,7 +12,8 @@ import asyncio
 import logging
 import threading
 from collections import defaultdict
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from synthetic_teleology.domain.events import DomainEvent
 

@@ -19,7 +19,6 @@ import numpy as np
 from synthetic_teleology.agents.factory import AgentFactory
 from synthetic_teleology.agents.teleological import TeleologicalAgent
 from synthetic_teleology.domain.enums import Direction
-from synthetic_teleology.domain.values import ObjectiveVector
 from synthetic_teleology.environments.numeric import NumericEnvironment
 from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark

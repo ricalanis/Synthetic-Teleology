@@ -30,7 +30,6 @@ from synthetic_teleology.domain.events import (
 )
 from synthetic_teleology.infrastructure.event_bus import EventBus
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -51,6 +50,8 @@ class AgentLogEntry:
     goal_revised: bool = False
     constraint_violated: bool = False
     reflection_triggered: bool = False
+    reasoning: str = ""                             # NEW: LLM reasoning at this step
+    hypotheses_count: int = 0                       # NEW: plan hypotheses generated
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

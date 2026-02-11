@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 
 import pytest
 
 from synthetic_teleology.domain.events import (
     DomainEvent,
-    GoalCreated,
-    GoalRevised,
     EvaluationCompleted,
+    GoalCreated,
 )
-from synthetic_teleology.domain.values import EvalSignal, GoalRevision
+from synthetic_teleology.domain.values import EvalSignal
 from synthetic_teleology.infrastructure.event_bus import (
     AsyncEventBus,
     EventBus,

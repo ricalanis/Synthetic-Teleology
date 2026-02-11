@@ -37,7 +37,9 @@ from synthetic_teleology.graph.nodes import (
     revise_node,
 )
 from synthetic_teleology.graph.prebuilt import (
+    create_llm_agent,
     create_llm_teleological_agent,
+    create_numeric_agent,
     create_react_teleological_agent,
     create_teleological_agent,
 )
@@ -54,7 +56,10 @@ __all__ = [
     "GraphBuilder",
     "build_multi_agent_graph",
     "AgentConfig",
-    # Prebuilt
+    # Prebuilt (v1.0)
+    "create_llm_agent",
+    "create_numeric_agent",
+    # Prebuilt (legacy)
     "create_teleological_agent",
     "create_llm_teleological_agent",
     "create_react_teleological_agent",

@@ -83,7 +83,7 @@ class MetricsReport:
             }
         """
         iso = datetime.datetime.fromtimestamp(
-            self.timestamp, tz=datetime.timezone.utc
+            self.timestamp, tz=datetime.UTC
         ).isoformat()
 
         metrics_dict: dict[str, Any] = {}

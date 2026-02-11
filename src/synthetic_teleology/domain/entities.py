@@ -15,7 +15,6 @@ from typing import Any
 from .enums import ConstraintType, GoalStatus
 from .values import ConstraintSpec, EvalSignal, GoalRevision, ObjectiveVector
 
-
 # ---------------------------------------------------------------------------
 # Goal entity
 # ---------------------------------------------------------------------------
@@ -28,12 +27,18 @@ class Goal:
     Goals form a directed acyclic graph via ``parent_id``.  Revisions produce
     a *new* ``Goal`` instance with an incremented ``version`` while the
     original is marked ``GoalStatus.REVISED``.
+
+    In LLM mode, the primary goal representation is ``description`` (natural
+    language) with optional ``success_criteria``.  The ``objective`` vector is
+    optional and used for numeric evaluation when available.
     """
 
     goal_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str = ""
     description: str = ""
     objective: ObjectiveVector | None = None
+    success_criteria: list[str] = field(default_factory=list)
+    priority: float = 1.0
     status: GoalStatus = GoalStatus.ACTIVE
     parent_id: str | None = None
     version: int = 1
@@ -44,15 +49,31 @@ class Goal:
 
     def revise(
         self,
-        new_objective: ObjectiveVector,
+        new_objective: ObjectiveVector | None = None,
         reason: str = "",
         eval_signal: EvalSignal | None = None,
+        *,
+        new_description: str | None = None,
+        new_criteria: list[str] | None = None,
     ) -> tuple[Goal, GoalRevision]:
         """Create a revised successor goal and a ``GoalRevision`` record.
 
         The *current* goal is marked ``GoalStatus.REVISED``; the returned goal
         inherits name, description, parent, and metadata but gets a fresh id,
-        incremented version, and the supplied ``new_objective``.
+        incremented version, and the supplied changes.
+
+        Parameters
+        ----------
+        new_objective:
+            Revised objective vector. If ``None``, keeps the current objective.
+        reason:
+            Human-readable reason for the revision.
+        eval_signal:
+            The evaluation signal that triggered this revision.
+        new_description:
+            Revised natural language description. If ``None``, keeps current.
+        new_criteria:
+            Revised success criteria. If ``None``, keeps current.
 
         Returns
         -------
@@ -61,8 +82,12 @@ class Goal:
         """
         new_goal = Goal(
             name=self.name,
-            description=self.description,
-            objective=new_objective,
+            description=new_description if new_description is not None else self.description,
+            objective=new_objective if new_objective is not None else self.objective,
+            success_criteria=(
+                list(new_criteria) if new_criteria is not None else list(self.success_criteria)
+            ),
+            priority=self.priority,
             status=GoalStatus.ACTIVE,
             parent_id=self.parent_id,
             version=self.version + 1,

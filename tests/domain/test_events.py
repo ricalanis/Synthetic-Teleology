@@ -6,9 +6,12 @@ import time
 
 import pytest
 
-from synthetic_teleology.domain.enums import AgentState, NegotiationStrategy, RevisionReason
-from synthetic_teleology.domain.values import EvalSignal, ObjectiveVector
-from synthetic_teleology.domain.enums import Direction
+from synthetic_teleology.domain.enums import (
+    AgentState,
+    Direction,
+    NegotiationStrategy,
+    RevisionReason,
+)
 from synthetic_teleology.domain.events import (
     ActionExecuted,
     AgentRegistered,
@@ -28,6 +31,7 @@ from synthetic_teleology.domain.events import (
     ReflectionTriggered,
     StateChanged,
 )
+from synthetic_teleology.domain.values import EvalSignal, ObjectiveVector
 
 
 class TestDomainEvent:

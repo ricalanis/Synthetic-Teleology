@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from synthetic_teleology.domain.entities import Constraint, Goal
 from synthetic_teleology.domain.enums import (
     ConstraintType,
-    Direction,
     GoalStatus,
 )
 from synthetic_teleology.domain.values import (
@@ -14,8 +14,6 @@ from synthetic_teleology.domain.values import (
     EvalSignal,
     ObjectiveVector,
 )
-from synthetic_teleology.domain.entities import Constraint, Goal
-
 
 # ===================================================================== #
 #  Goal lifecycle                                                         #

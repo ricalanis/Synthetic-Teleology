@@ -9,21 +9,28 @@ Re-exports the public API surface for convenience::
     )
 """
 
-from synthetic_teleology.infrastructure.event_bus import (
-    AsyncEventBus,
-    EventBus,
-    EventStore,
-)
-from synthetic_teleology.infrastructure.registry import (
-    ComponentRegistry,
-    registry,
-)
 from synthetic_teleology.infrastructure.config import (
     AgentConfig,
     BenchmarkConfig,
     EnvironmentConfig,
     LoopConfig,
     load_config_from_json,
+)
+from synthetic_teleology.infrastructure.event_bus import (
+    AsyncEventBus,
+    EventBus,
+    EventStore,
+)
+from synthetic_teleology.infrastructure.llm import (
+    LLMConfig,
+    LLMError,
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+)
+from synthetic_teleology.infrastructure.registry import (
+    ComponentRegistry,
+    registry,
 )
 from synthetic_teleology.infrastructure.serialization import (
     deserialize,
@@ -33,13 +40,6 @@ from synthetic_teleology.infrastructure.serialization import (
     to_json,
     to_yaml,
     yaml_available,
-)
-from synthetic_teleology.infrastructure.llm import (
-    LLMConfig,
-    LLMError,
-    LLMMessage,
-    LLMProvider,
-    LLMResponse,
 )
 
 __all__ = [

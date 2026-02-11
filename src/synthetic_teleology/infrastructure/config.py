@@ -14,7 +14,6 @@ import json
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
-
 # ===================================================================== #
 #  Loop Configuration                                                    #
 # ===================================================================== #

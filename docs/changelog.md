@@ -2,6 +2,101 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [1.0.0] — 2026-02-10
+
+### Major: LLM-First Probabilistic Architecture
+
+Complete rewrite transforming the framework from deterministic numeric computation to LLM-driven probabilistic reasoning, while preserving full backward compatibility with numeric mode.
+
+#### New: LLM Reasoning Services
+- **`services/llm_evaluation.py`** — `LLMEvaluator`: structured output evaluation with chain-of-thought reasoning, per-criterion scores, and confidence
+- **`services/llm_planning.py`** — `LLMPlanner`: multi-hypothesis planning (N candidates), softmax probability distribution, tool-aware action proposals
+- **`services/llm_revision.py`** — `LLMReviser`: LLM-driven goal revision with text-based description/criteria changes and optional numeric adjustments
+- **`services/llm_constraints.py`** — `LLMConstraintChecker`: soft constraint reasoning with severity scores, mitigation suggestions, and detailed assessments
+
+#### New: Dual-Mode GraphBuilder
+- `GraphBuilder.with_model(model)` — triggers LLM mode with auto-defaulting to LLM services
+- `GraphBuilder.with_goal(description, criteria=[...])` — natural language goals with success criteria
+- `GraphBuilder.with_tools(*tools)` — LangChain tools for agent actions
+- `GraphBuilder.with_constraints(*constraints)` — natural language constraints
+- `GraphBuilder.with_num_hypotheses(n)` — multi-hypothesis planning configuration
+- `GraphBuilder.with_temperature(t)` — LLM sampling temperature
+- Numeric mode preserved: `.with_objective(values)` still works as before
+
+#### New: Prebuilt Constructors
+- `create_llm_agent(model, goal, ...)` — one-liner for LLM agents
+- `create_numeric_agent(target_values, perceive_fn, ...)` — renamed legacy constructor
+
+#### Modified: Domain Layer
+- `Goal` — added `success_criteria: list[str]`, `priority: float`, text-based `revise()` with `new_description`/`new_criteria` kwargs
+- `EvalSignal` — added `reasoning: str`, `criteria_scores: Mapping[str, float]`
+- `ActionSpec` — added `description: str`, `tool_name: str | None`, `reasoning: str`
+- `StateSnapshot` — added `observation: str`, `context: Mapping[str, Any]`, `values` default `()`
+- New value object: `Hypothesis(actions, confidence, reasoning, expected_outcome, risk_assessment)`
+- New enum value: `RevisionReason.EVALUATION_FEEDBACK`
+
+#### Modified: Graph Layer
+- `TeleologicalState` — new fields: `observation`, `hypotheses`, `selected_plan`, `model`, `tools`, `num_hypotheses`, `reasoning_trace` (append-reducer), `constraint_assessments`
+- All 8 nodes — dual-mode support (LLM reasoning traces + numeric fallback)
+- `MultiAgentState` — new fields: `model`, `tools`, `shared_direction`, `reasoning_trace`
+- `AgentConfig` — accepts `Union[Goal, str]` goal, per-agent `model`, `tools`, `criteria`, `constraints`
+
+#### Modified: Measurement Layer
+- `AgentLogEntry` — added `reasoning: str`, `hypotheses_count: int`
+- New metric: `ReasoningQuality` — measures presence, diversity, and depth of LLM reasoning traces
+
+#### Modified: Infrastructure
+- `LLMProvider` — deprecated with `DeprecationWarning` in favor of `BaseChatModel`
+- New: `LLMProviderToChatModel` bridge (`infrastructure/llm/langchain_bridge.py`)
+
+#### New: Tests (49 new)
+- `tests/services/test_llm_evaluation.py` — 6 tests
+- `tests/services/test_llm_planning.py` — 12 tests (incl. softmax)
+- `tests/services/test_llm_revision.py` — 5 tests
+- `tests/services/test_llm_constraints.py` — 5 tests
+- `tests/graph/test_builder_llm.py` — 14 tests
+- `tests/graph/test_llm_graph.py` — 7 tests (full integration + metric)
+- `tests/helpers/mock_llm.py` — `MockStructuredChatModel` for testing
+
+#### New: Examples
+- `11_llm_quickstart.py` — LLM agent with natural language goals
+- `12_llm_tools.py` — Agent with LangChain tools
+- `13_llm_multi_agent.py` — Multi-agent LLM coordination
+- `14_llm_metrics.py` — ReasoningQuality metric demo (no API key needed)
+
+#### Stats
+- **498 tests** (449 existing + 49 new), all passing
+- **14 conceptual examples** (10 numeric + 4 LLM)
+- Full backward compatibility — all v0.2.x code works unchanged
+
+---
+
+## [0.2.2] — 2026-02-10
+
+### Expanded: Conceptual examples covering full Haidemariam (2026) theory
+
+Added 7 new conceptual examples (04–10) that demonstrate every major theoretical concept from the Synthetic Teleology paper. No new framework code — only new example scripts.
+
+#### New examples
+- `04_evaluation_strategies.py` — NumericEvaluator, CompositeEvaluator, ReflectiveEvaluator with drift detection
+- `05_goal_revision.py` — ThresholdUpdater, GradientUpdater, UncertaintyAwareUpdater, GoalUpdaterChain
+- `06_planning_strategies.py` — GreedyPlanner, StochasticPlanner (temperature effects), HierarchicalPlanner decomposition
+- `07_hierarchical_goals.py` — GoalTree construction, coherence validation, revision propagation, HierarchicalUpdater
+- `08_environments.py` — ResourceEnvironment (scarcity/regeneration), ResearchEnvironment (knowledge synthesis), perturbation injection
+- `09_metrics_measurement.py` — All 7 metrics (GP, TC, RE, AD, NF, IY, LS), MetricsEngine, AgentLog, MetricsReport
+- `10_ethical_constraints.py` — EthicalChecker with custom predicates, ConstraintPipeline (fail_fast), PolicyFilter
+
+#### Paper concepts now demonstrated
+- Delta(G_t, S_t) evaluation function, composite evaluation, reflective self-model
+- G_t → G_{t+1} revision dynamics: threshold, gradient, uncertainty, chain of responsibility
+- pi_t policy generation: deterministic, stochastic (softmax), hierarchical decomposition
+- Hierarchical goal structure: GoalTree, coherence, propagation, parent regularization
+- Environment types: resource scarcity, knowledge synthesis, perturbation injection
+- All 7 teleological metrics with measurement engine and reporting
+- Normative constraint envelope E_t: ethical predicates, policy filtering, fail-fast pipeline
+
+---
+
 ## [0.2.1] — 2026-02-10
 
 ### Restructured: Examples directory

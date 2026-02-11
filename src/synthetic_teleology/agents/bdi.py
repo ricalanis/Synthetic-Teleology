@@ -36,7 +36,7 @@ import numpy as np
 from synthetic_teleology.agents.base import BaseAgent
 from synthetic_teleology.domain.aggregates import ConstraintSet
 from synthetic_teleology.domain.entities import Goal
-from synthetic_teleology.domain.enums import AgentState, GoalStatus
+from synthetic_teleology.domain.enums import AgentState
 from synthetic_teleology.domain.events import (
     ActionExecuted,
     EvaluationCompleted,
@@ -49,7 +49,6 @@ from synthetic_teleology.domain.values import (
     ActionSpec,
     EvalSignal,
     GoalRevision,
-    ObjectiveVector,
     PolicySpec,
     StateSnapshot,
 )

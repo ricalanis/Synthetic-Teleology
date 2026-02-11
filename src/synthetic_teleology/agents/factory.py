@@ -35,9 +35,8 @@ Builder style::
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
-from synthetic_teleology.agents.base import BaseAgent
 from synthetic_teleology.agents.teleological import TeleologicalAgent
 from synthetic_teleology.domain.aggregates import ConstraintSet
 from synthetic_teleology.domain.entities import Constraint, Goal

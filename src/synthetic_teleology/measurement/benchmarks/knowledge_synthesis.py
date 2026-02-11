@@ -19,7 +19,12 @@ import numpy as np
 from synthetic_teleology.agents.teleological import TeleologicalAgent
 from synthetic_teleology.domain.entities import Goal
 from synthetic_teleology.domain.enums import Direction
-from synthetic_teleology.domain.values import ActionSpec, ObjectiveVector, PolicySpec, StateSnapshot
+from synthetic_teleology.domain.values import (
+    ActionSpec,
+    ObjectiveVector,
+    PolicySpec,
+    StateSnapshot,
+)
 from synthetic_teleology.environments.research import ResearchEnvironment
 from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark

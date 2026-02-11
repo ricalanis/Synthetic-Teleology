@@ -50,6 +50,10 @@ from synthetic_teleology.services.goal_revision import (
     ThresholdUpdater,
     UncertaintyAwareUpdater,
 )
+from synthetic_teleology.services.llm_constraints import LLMConstraintChecker
+from synthetic_teleology.services.llm_evaluation import LLMEvaluator
+from synthetic_teleology.services.llm_planning import LLMPlanner as LLMHypothesisPlanner
+from synthetic_teleology.services.llm_revision import LLMReviser
 from synthetic_teleology.services.loop import (
     AsyncAgenticLoop,
     BaseAgenticLoop,
@@ -104,4 +108,9 @@ __all__ = [
     "SyncAgenticLoop",
     "AsyncAgenticLoop",
     "RunResult",
+    # LLM-backed services (v1.0)
+    "LLMEvaluator",
+    "LLMHypothesisPlanner",
+    "LLMReviser",
+    "LLMConstraintChecker",
 ]

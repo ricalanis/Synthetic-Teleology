@@ -379,7 +379,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        with open(input_path, "r", encoding="utf-8") as fh:
+        with open(input_path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (json.JSONDecodeError, OSError) as exc:
         print(f"Error reading {input_path}: {exc}", file=sys.stderr)

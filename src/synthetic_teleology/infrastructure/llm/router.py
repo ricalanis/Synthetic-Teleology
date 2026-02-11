@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 from synthetic_teleology.infrastructure.llm import (
     LLMConfig,
