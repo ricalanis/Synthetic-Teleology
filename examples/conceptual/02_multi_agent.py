@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example 03: Two agents with subgraphs + consensus negotiation.
+"""Example 02: Two agents with subgraphs + consensus negotiation.
 
 Demonstrates:
 - Building a multi-agent coordination graph
@@ -7,7 +7,7 @@ Demonstrates:
 - Agents negotiate a shared objective between rounds
 
 Run:
-    PYTHONPATH=src python examples/03_multi_agent_negotiation.py
+    PYTHONPATH=src python examples/conceptual/02_multi_agent.py
 """
 
 from __future__ import annotations

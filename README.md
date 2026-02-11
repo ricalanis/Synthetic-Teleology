@@ -132,22 +132,30 @@ result = app.invoke({...})
 
 ## Examples
 
+### Conceptual
+
+Core examples demonstrating the framework's building blocks:
+
 | # | File | Demonstrates |
 |---|------|-------------|
-| 01 | `01_langgraph_basic_loop.py` | Basic teleological loop as StateGraph, `.invoke()`, inspecting state |
-| 02 | `02_llm_goal_directed_agent.py` | LLM-powered evaluation/planning with streaming |
-| 03 | `03_multi_agent_negotiation.py` | Two agents with subgraphs + ConsensusNegotiator |
-| 04 | `04_human_in_the_loop.py` | Custom review node for human approval at revision |
-| 05 | `05_hierarchical_goals.py` | GoalTree + nested subgraphs, revision propagation |
-| 06 | `06_benchmark_measurement.py` | Stream events → measurement bridge |
-| 07 | `07_react_research_agent.py` | `create_react_teleological_agent()` with tool metadata |
-| 08 | `08_constraint_aware_planning.py` | SafetyChecker + BudgetChecker, streaming constraint checks |
-
-Run any example:
+| 01 | `conceptual/01_basic_loop.py` | Basic teleological loop as StateGraph, `.invoke()`, inspecting state |
+| 02 | `conceptual/02_multi_agent.py` | Two agents with subgraphs + ConsensusNegotiator |
+| 03 | `conceptual/03_constraints.py` | SafetyChecker + BudgetChecker, streaming constraint checks |
 
 ```bash
-PYTHONPATH=src python examples/01_langgraph_basic_loop.py
+PYTHONPATH=src python examples/conceptual/01_basic_loop.py
 ```
+
+### Production
+
+Full-featured agents that demonstrate real-world usage with custom evaluators, planners, and constraint checkers:
+
+| Agent | Description | Run |
+|-------|-------------|-----|
+| **Polymarket Trader** | Goal-directed prediction market trading. Aligns portfolio positions with conviction-based probability estimates using Kelly criterion sizing, risk limits, and capital constraints. | `PYTHONPATH=src python -m examples.production.polymarket_trader.main` |
+| **Sales SDR** | Goal-directed sales development. Manages lead qualification, selects outreach channels, and tracks conversion funnel metrics with contact frequency and daily limit constraints. | `PYTHONPATH=src python -m examples.production.sales_sdr.main` |
+
+Both agents run in simulated mode by default. Pass `--live` to use real APIs (requires `POLYMARKET_API_KEY` or `HUBSPOT_API_KEY`).
 
 ## Metrics
 

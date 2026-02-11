@@ -7,7 +7,7 @@ Demonstrates:
 - Inspecting the resulting state
 
 Run:
-    PYTHONPATH=src python examples/01_langgraph_basic_loop.py
+    PYTHONPATH=src python examples/conceptual/01_basic_loop.py
 """
 
 from __future__ import annotations

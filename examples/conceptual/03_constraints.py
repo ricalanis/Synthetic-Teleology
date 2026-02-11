@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example 08: Constraint-aware planning with SafetyChecker and BudgetChecker.
+"""Example 03: Constraint-aware planning with SafetyChecker and BudgetChecker.
 
 Demonstrates:
 - Integrating SafetyChecker and BudgetChecker into the LangGraph
@@ -7,7 +7,7 @@ Demonstrates:
 - Policy filtering removing unsafe actions
 
 Run:
-    PYTHONPATH=src python examples/08_constraint_aware_planning.py
+    PYTHONPATH=src python examples/conceptual/03_constraints.py
 """
 
 from __future__ import annotations

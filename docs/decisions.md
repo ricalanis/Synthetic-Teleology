@@ -1,5 +1,19 @@
 # Architecture Decisions
 
+## 2026-02-10: Example Restructuring (v0.2.1)
+
+### Decision: Separate Conceptual vs Production Examples
+- **Context:** The 16-file flat `examples/` directory mixed legacy (v0.1.0) and LangGraph examples. Most users only need 2-3 to understand the framework, while advanced users want real-world production patterns.
+- **Choice:** Split into `examples/conceptual/` (3 core demos) and `examples/production/` (self-contained mini-packages with custom strategies, domain models, and CLI entry points).
+- **Rationale:** Conceptual examples stay simple and focused on framework APIs. Production examples demonstrate the full Strategy pattern — custom evaluators, planners, and constraint checkers for real domains — without cluttering the learning path. Each production agent is a self-contained package runnable as `python -m examples.production.<agent>.main`.
+
+### Decision: Production Examples as Mini-Packages (Not Single Scripts)
+- **Context:** A single-file production example would be too large and hard to navigate.
+- **Choice:** Each production agent has its own package: `models.py` (domain), `market_data.py`/`crm.py` (data layer), `strategies.py` (custom evaluator/planner/constraints), `agent.py` (graph wiring), `main.py` (CLI).
+- **Rationale:** Mirrors how a user would structure a real agent project. Demonstrates clean separation of concerns. The data layer provides both a real API client and a simulated fallback, so examples work out of the box without API keys.
+
+---
+
 ## 2026-02-10: LangGraph Migration (v0.2.0)
 
 ### Decision: Replace Custom Agentic Loop with LangGraph StateGraph

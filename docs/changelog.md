@@ -2,6 +2,36 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [0.2.1] — 2026-02-10
+
+### Restructured: Examples directory
+
+Replaced the flat 16-file examples directory (8 legacy + 8 LangGraph) with a clean `conceptual/` vs `production/` split.
+
+#### `examples/conceptual/` — 3 core framework demos
+- `01_basic_loop.py` — Basic StateGraph `.invoke()` with GraphBuilder
+- `02_multi_agent.py` — Two agents + ConsensusNegotiator subgraphs
+- `03_constraints.py` — SafetyChecker + BudgetChecker with streaming
+
+#### `examples/production/polymarket_trader/` — Prediction market trading agent
+- Custom `PortfolioEvaluator` scoring conviction alignment
+- `TradingPlanner` with Kelly criterion position sizing
+- `RiskChecker` (max position, exposure, drawdown) + `CapitalChecker`
+- Real Polymarket CLOB API client + simulated random-walk fallback
+- CLI: `python -m examples.production.polymarket_trader.main`
+
+#### `examples/production/sales_sdr/` — Sales development agent
+- Custom `PipelineEvaluator` scoring funnel health
+- `OutreachPlanner` with lead prioritization and channel selection
+- `ContactFrequencyChecker` + `DailyLimitChecker`
+- Simulated CRM with realistic response probability model + HubSpot API fallback
+- CLI: `python -m examples.production.sales_sdr.main`
+
+### Deleted
+- 13 example files (8 legacy v0.1.0 + 5 non-core LangGraph examples)
+
+---
+
 ## [0.2.0] — 2026-02-10
 
 Major release: **LangGraph migration**. The custom agentic loop is replaced by a LangGraph StateGraph while preserving all existing domain/service abstractions.
