@@ -2,6 +2,32 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## Unreleased
+
+### 5 Production Examples (30 new files)
+
+Five production-grade examples demonstrating the framework's LLM-first features in realistic, long-running scenarios. All use the hybrid mock pattern: custom evaluator for deterministic scoring + MockStructuredChatModel for planner/reviser. Self-contained (no API key required); set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` for real LLM mode.
+
+1. **`competitive_research/`** — Competitive Research Analyst (18 steps, goal revision at pivot discovery)
+   - Features: tool routing, knowledge store, audit trail, goal revision
+   - Plot twist: competitor strategic pivot to AI discovered at step 8
+
+2. **`investment_thesis/`** — Investment Thesis Builder (30 steps, evidence-driven goal revision)
+   - Features: tool routing, knowledge store, audit trail, constraint checking
+   - Plot twist: lawsuit discovery at step 10 triggers risk reassessment
+
+3. **`data_pipeline_fixer/`** — Autonomous Pipeline Monitor (20 steps, goal achieved)
+   - Features: evolving constraints, goal revision, multi-hypothesis repair
+   - Plot twist: schema drift at step 8 degrades health → adapts to schema v2.0
+
+4. **`learning_curriculum/`** — Adaptive Learning Curriculum (35 steps, longest example)
+   - Features: feedback loop, knowledge store, prerequisite + time budget constraints
+   - Plot twist: quiz failure at step 15 reveals knowledge gap → remedial modules added
+
+5. **`deployment_coordinator/`** — Multi-Agent Deployment (3 agents, 3 rounds)
+   - Features: multi-agent (Send API), LLM negotiation, per-agent goal revision
+   - Plot twist: CVE discovery in round 2 → negotiated production pause → patching
+
 ## [1.5.0] — 2026-02-11
 
 ### Senior Review Fix — 12 Issues Resolved

@@ -242,6 +242,11 @@
 - **Choice:** Split into `examples/conceptual/` (14 core demos) and `examples/production/` (self-contained mini-packages with custom strategies, domain models, and CLI entry points).
 - **Rationale:** Conceptual examples stay simple and focused on framework APIs. Production examples demonstrate the full Strategy pattern — custom evaluators, planners, and constraint checkers for real domains — without cluttering the learning path.
 
+### Hybrid Mock Pattern for Production Examples
+- **Context:** Production examples need to run without API keys (CI, demos, learning) while also supporting real LLM mode. Fully mocking all 5 LLM services (evaluator, planner, reviser, constraints, negotiation) creates fragile mock response ordering that breaks when node execution order varies.
+- **Choice:** Custom evaluator (reads simulated environment state → deterministic scores) + LLM planner/reviser via `MockStructuredChatModel`. Simulated tools mutate shared domain state. Custom `BaseConstraintChecker` subclasses instead of `LLMConstraintChecker` (except multi-agent example). Real LLM replaces mock when API key present; custom evaluator and tools remain.
+- **Rationale:** Custom evaluator eliminates EvaluationOutput from the mock sequence, halving mock complexity. Deterministic scores ensure predictable revision triggers (score <= -0.3). Custom constraint checkers avoid interleaving ConstraintCheckOutput in the mock. The mock only serves planner + reviser, giving a simple linear response list. Real LLM mode is a single toggle — swap the model, everything else stays.
+
 ### Production Examples as Mini-Packages
 - **Context:** A single-file production example would be too large and hard to navigate.
 - **Choice:** Each production agent has its own package: `models.py` (domain), `market_data.py`/`crm.py` (data layer), `strategies.py` (custom evaluator/planner/constraints), `agent.py` (graph wiring), `main.py` (CLI).
