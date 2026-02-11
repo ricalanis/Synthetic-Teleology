@@ -13,10 +13,10 @@ Run:
 
 from __future__ import annotations
 
-from synthetic_teleology.domain.enums import Direction
-from synthetic_teleology.domain.entities import Goal
-from synthetic_teleology.domain.values import ObjectiveVector
 from synthetic_teleology.domain.aggregates import GoalTree
+from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
+from synthetic_teleology.domain.values import ObjectiveVector
 
 
 def main() -> None:

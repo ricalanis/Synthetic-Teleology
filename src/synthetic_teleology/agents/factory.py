@@ -209,6 +209,39 @@ class AgentFactory:
         )
 
     @staticmethod
+    def create_teleological_graph(
+        agent_id: str,
+        target_values: tuple[float, ...],
+        perceive_fn: Any,
+        transition_fn: Any = None,
+        act_fn: Any = None,
+        *,
+        directions: tuple | None = None,
+        max_steps: int = 100,
+        goal_achieved_threshold: float = 0.9,
+        step_size: float = 0.5,
+        checkpointer: Any = None,
+    ) -> tuple:
+        """Create a teleological LangGraph from simple parameters.
+
+        Returns a ``(compiled_graph, initial_state)`` tuple.
+        """
+        from synthetic_teleology.graph.prebuilt import create_teleological_agent
+
+        return create_teleological_agent(
+            target_values=target_values,
+            perceive_fn=perceive_fn,
+            transition_fn=transition_fn,
+            act_fn=act_fn,
+            directions=directions,
+            max_steps=max_steps,
+            goal_achieved_threshold=goal_achieved_threshold,
+            step_size=step_size,
+            checkpointer=checkpointer,
+            agent_id=agent_id,
+        )
+
+    @staticmethod
     def create_constrained_agent(
         agent_id: str,
         goal: Goal,
@@ -517,6 +550,73 @@ class AgentBuilder:
             planner=planner,
             constraints=self._constraint_set,
         )
+
+    # -- graph build --------------------------------------------------------
+
+    def build_graph(
+        self,
+        perceive_fn: Any = None,
+        act_fn: Any = None,
+        transition_fn: Any = None,
+        max_steps: int = 100,
+        goal_achieved_threshold: float = 0.9,
+        checkpointer: Any = None,
+    ) -> tuple:
+        """Build a compiled LangGraph instead of a TeleologicalAgent.
+
+        Returns a ``(compiled_graph, initial_state)`` tuple ready for
+        ``app.invoke(initial_state)``.
+
+        Parameters
+        ----------
+        perceive_fn:
+            Callable returning a StateSnapshot.
+        act_fn:
+            Callable selecting an action from policy and state.
+        transition_fn:
+            Callable transitioning the environment.
+        max_steps:
+            Maximum loop iterations.
+        goal_achieved_threshold:
+            Score threshold for goal achievement.
+        checkpointer:
+            Optional LangGraph checkpointer.
+
+        Returns
+        -------
+        tuple[CompiledStateGraph, dict]
+            The compiled graph and initial state.
+        """
+        from synthetic_teleology.graph.builder import GraphBuilder
+
+        if self._goal is None:
+            raise ValueError(
+                "AgentBuilder requires a goal.  "
+                "Call .with_goal(goal) or .with_objective(...) before .build_graph()."
+            )
+
+        builder = GraphBuilder(self._agent_id)
+        builder.with_goal(self._goal)
+        builder.with_max_steps(max_steps)
+        builder.with_goal_achieved_threshold(goal_achieved_threshold)
+        builder.with_action_step_size(self._action_step_size)
+
+        if self._evaluator is not None:
+            builder.with_evaluator(self._evaluator)
+        if self._updater is not None:
+            builder.with_goal_updater(self._updater)
+        if self._planner is not None:
+            builder.with_planner(self._planner)
+        if checkpointer is not None:
+            builder.with_checkpointer(checkpointer)
+
+        builder.with_environment(
+            perceive_fn=perceive_fn,
+            act_fn=act_fn,
+            transition_fn=transition_fn,
+        )
+
+        return builder.build()
 
     # -- introspection ------------------------------------------------------
 

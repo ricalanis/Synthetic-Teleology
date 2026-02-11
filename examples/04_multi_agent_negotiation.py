@@ -13,8 +13,6 @@ Run:
 
 from __future__ import annotations
 
-import numpy as np
-
 from synthetic_teleology.domain.values import ActionSpec
 from synthetic_teleology.environments.shared import SharedEnvironment
 

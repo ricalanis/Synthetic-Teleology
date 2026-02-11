@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import time
 
-from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     ActionSpec,
     ObjectiveVector,
@@ -96,7 +96,7 @@ def main() -> None:
     print("--- BudgetChecker ---\n")
 
     budget = BudgetChecker(total_budget=2.0, name="ActionBudget")
-    print(f"Total budget: 2.0")
+    print("Total budget: 2.0")
     print(f"Remaining:    {budget.budget_remaining:.2f}")
     print()
 
@@ -116,7 +116,7 @@ def main() -> None:
     budget.record_cost(0.3)
     budget.record_cost(0.5)
     budget.record_cost(0.8)
-    print(f"\nAfter spending 0.3 + 0.5 + 0.8 = 1.6:")
+    print("\nAfter spending 0.3 + 0.5 + 0.8 = 1.6:")
     print(f"  Total spent: {budget.total_spent:.2f}")
     print(f"  Remaining:   {budget.budget_remaining:.2f}")
 

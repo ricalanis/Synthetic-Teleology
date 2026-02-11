@@ -13,22 +13,20 @@ Run:
 
 from __future__ import annotations
 
-import time
-
-from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     ActionSpec,
     ObjectiveVector,
-    StateSnapshot,
     PolicySpec,
+    StateSnapshot,
 )
 from synthetic_teleology.environments.numeric import NumericEnvironment
+from synthetic_teleology.services.constraint_engine import ConstraintPipeline
 from synthetic_teleology.services.evaluation import NumericEvaluator
 from synthetic_teleology.services.goal_revision import ThresholdUpdater
+from synthetic_teleology.services.loop import SyncAgenticLoop
 from synthetic_teleology.services.planning import GreedyPlanner
-from synthetic_teleology.services.constraint_engine import ConstraintPipeline
-from synthetic_teleology.services.loop import SyncAgenticLoop, StopReason
 
 
 def main() -> None:
@@ -54,9 +52,15 @@ def main() -> None:
     actions: list[ActionSpec] = []
     for d in range(2):
         eff_pos = tuple(1.0 if i == d else 0.0 for i in range(2))
-        actions.append(ActionSpec(name=f"pos_{d}", parameters={"effect": eff_pos, "delta": eff_pos}))
+        actions.append(ActionSpec(
+            name=f"pos_{d}",
+            parameters={"effect": eff_pos, "delta": eff_pos},
+        ))
         eff_neg = tuple(-1.0 if i == d else 0.0 for i in range(2))
-        actions.append(ActionSpec(name=f"neg_{d}", parameters={"effect": eff_neg, "delta": eff_neg}))
+        actions.append(ActionSpec(
+            name=f"neg_{d}",
+            parameters={"effect": eff_neg, "delta": eff_neg},
+        ))
     actions.append(ActionSpec(name="noop", parameters={"effect": (0.0, 0.0), "delta": (0.0, 0.0)}))
 
     planner = GreedyPlanner(action_space=actions)

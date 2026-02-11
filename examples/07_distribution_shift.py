@@ -39,10 +39,10 @@ def main() -> None:
     )
 
     print(f"Benchmark: {benchmark}")
-    print(f"  Dimensions:          3")
-    print(f"  Steps per phase:     15 (30 total)")
-    print(f"  Perturbation:        magnitude=4.0")
-    print(f"  Noise (pre/post):    0.05 / 0.20")
+    print("  Dimensions:          3")
+    print("  Steps per phase:     15 (30 total)")
+    print("  Perturbation:        magnitude=4.0")
+    print("  Noise (pre/post):    0.05 / 0.20")
     print()
 
     # -- Run benchmark --------------------------------------------------------
@@ -110,7 +110,7 @@ def main() -> None:
     print(f"  Goal revisions: {log.revision_count}")
 
     report = benchmark_detail.collect_metrics(log)
-    print(f"\nMetrics report:")
+    print("\nMetrics report:")
     print(report.summary())
 
     benchmark_detail.teardown()

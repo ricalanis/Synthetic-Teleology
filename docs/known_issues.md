@@ -34,3 +34,24 @@
 - **Root cause:** The project has its own `.venv` (Python 3.11.13) at `.venv/bin/python` with all dependencies installed.
 - **Fix:** Switched to using the project venv for all test runs.
 - **How to avoid:** Always use the project's virtual environment for testing. Check for `.venv/bin/python` in the project root first.
+
+## 2026-02-10: `from __future__ import annotations` breaks LangGraph TypedDict resolution
+
+- **What happened:** `NameError: name 'Goal' is not defined` when LangGraph compiled a `StateGraph(TeleologicalState)`. Also affected `MultiAgentState` in `multi_agent.py`.
+- **Root cause:** LangGraph uses `get_type_hints(..., include_extras=True)` at runtime to resolve TypedDict field annotations (especially `Annotated[list, operator.add]` reducers). When `from __future__ import annotations` is active, all annotations become strings. LangGraph's `get_type_hints()` then fails to resolve forward references like `"Goal"` or `"Annotated[list, operator.add]"`.
+- **Fix:** Removed `from __future__ import annotations` from `graph/state.py` and `graph/multi_agent.py`. Used explicit `Union[X, None]` instead of `X | None` for optional types.
+- **How to avoid:** Never use `from __future__ import annotations` in files that define TypedDict schemas consumed by LangGraph. This is a known LangGraph/Python 3.11 compatibility constraint. Document this in any new state/schema files.
+
+## 2026-02-10: LangGraph checkpointer cannot serialize custom strategy objects
+
+- **What happened:** `TypeError: Type is not msgpack serializable: NumericEvaluator` when using `MemorySaver` checkpointer with a teleological graph.
+- **Root cause:** The `TeleologicalState` stores injected strategies (evaluator, planner, goal_updater, etc.) as dict values. LangGraph's `MemorySaver` (and other checkpointers) use msgpack serialization, which cannot serialize arbitrary Python objects. The strategies are callables/class instances, not JSON-serializable data.
+- **Workaround:** For examples requiring checkpointing, avoid storing custom objects in state. The `04_human_in_the_loop.py` example uses a simulated approval callback pattern instead of LangGraph `interrupt()`/`Command(resume=...)`.
+- **How to avoid:** If full checkpointing is needed, strategies would need to be stored outside the state (e.g., via closures in node functions, or a global registry). This is a fundamental tension between LangGraph's serialization model and the dependency-injection approach. A future version could use a serializable strategy identifier + registry lookup pattern.
+
+## 2026-02-10: LangGraph stream returns dict chunks, not tuples
+
+- **What happened:** `ValueError: not enough values to unpack (expected 2, got 1)` in `streaming.py`.
+- **Root cause:** LangGraph `.stream(mode="updates")` returns `dict[str, dict]` chunks (mapping node name → state update), not `tuple[str, dict]` as initially assumed.
+- **Fix:** Changed iteration from `for node_name, state_update in stream:` to `for chunk in stream: for node_name, state_update in chunk.items():`.
+- **How to avoid:** Always test streaming code against a real compiled graph. The LangGraph stream API returns chunks where each chunk is a dict, not a sequence of tuples.

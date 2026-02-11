@@ -349,6 +349,55 @@ class EnvironmentConfig:
 
 
 # ===================================================================== #
+#  Graph Configuration                                                   #
+# ===================================================================== #
+
+@dataclass(frozen=True)
+class GraphConfig:
+    """Parameters for running the LangGraph teleological loop.
+
+    Attributes
+    ----------
+    max_steps:
+        Maximum loop iterations.
+    goal_achieved_threshold:
+        Eval score above which the goal is considered achieved.
+    enable_checkpointing:
+        If ``True``, use an in-memory checkpointer for persistence.
+    stream_mode:
+        LangGraph stream mode: ``"values"`` or ``"updates"``.
+    """
+
+    max_steps: int = 100
+    goal_achieved_threshold: float = 0.9
+    enable_checkpointing: bool = False
+    stream_mode: str = "updates"
+
+    def validate(self) -> None:
+        if self.max_steps < 1:
+            raise ValueError(f"max_steps must be >= 1, got {self.max_steps}")
+        if not (0.0 <= self.goal_achieved_threshold <= 1.0):
+            raise ValueError(
+                f"goal_achieved_threshold must be in [0, 1], got {self.goal_achieved_threshold}"
+            )
+        if self.stream_mode not in ("values", "updates"):
+            raise ValueError(
+                f"stream_mode must be 'values' or 'updates', got '{self.stream_mode}'"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GraphConfig:
+        valid_keys = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        cfg = cls(**filtered)
+        cfg.validate()
+        return cfg
+
+
+# ===================================================================== #
 #  Unified config loader                                                 #
 # ===================================================================== #
 
@@ -357,6 +406,7 @@ _CONFIG_MAP: dict[str, type] = {
     "agent": AgentConfig,
     "benchmark": BenchmarkConfig,
     "environment": EnvironmentConfig,
+    "graph": GraphConfig,
 }
 
 

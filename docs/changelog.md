@@ -2,6 +2,49 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [0.2.0] — 2026-02-10
+
+Major release: **LangGraph migration**. The custom agentic loop is replaced by a LangGraph StateGraph while preserving all existing domain/service abstractions.
+
+### New: LangGraph Layer (`graph/`)
+
+- **`graph/state.py`** — `TeleologicalState` TypedDict with append-reducer channels for events, goal_history, eval_history, action_history.
+- **`graph/nodes.py`** — 8 pure node functions: perceive, evaluate, revise, check_constraints, plan, filter_policy, act, reflect. Each delegates to existing service classes.
+- **`graph/edges.py`** — Conditional routing: `should_continue()` (loop/end), `should_revise()` (revise/skip).
+- **`graph/graph.py`** — `build_teleological_graph()`: wires nodes and edges into a compiled StateGraph.
+- **`graph/builder.py`** — `GraphBuilder` fluent API mirroring `AgentBuilder` but producing `(compiled_graph, initial_state)`.
+- **`graph/prebuilt.py`** — One-liner constructors: `create_teleological_agent()`, `create_llm_teleological_agent()`, `create_react_teleological_agent()`.
+- **`graph/multi_agent.py`** — `build_multi_agent_graph()`: per-agent subgraphs with negotiation rounds. `AgentConfig` dataclass, `MultiAgentState` TypedDict.
+- **`graph/streaming.py`** — Stream event formatters: `format_stream_events()`, `collect_stream_events()`, `stream_to_agent_log_entries()`.
+
+### Modified
+
+- **`pyproject.toml`** — Version 0.2.0. Added `langgraph>=0.2`, `langchain-core>=0.3` as core deps. Added `llm-anthropic-lc`, `llm-openai-lc` optional groups. Added `langgraph-cli` to dev deps.
+- **`__init__.py`** — Version 0.2.0. Exports `build_teleological_graph`, `GraphBuilder`, `TeleologicalState` at top level.
+- **`services/loop.py`** — `SyncAgenticLoop` and `AsyncAgenticLoop` now emit `DeprecationWarning` on init.
+- **`agents/factory.py`** — `AgentBuilder.build_graph()` method added. `AgentFactory.create_teleological_graph()` static method added.
+- **`infrastructure/config.py`** — `GraphConfig` dataclass added with `max_steps`, `goal_achieved_threshold`, `enable_checkpointing`, `stream_mode`.
+- **`langgraph.json`** — LangGraph Platform configuration.
+
+### Examples (rewritten for LangGraph)
+
+- `01_langgraph_basic_loop.py` — Basic StateGraph `.invoke()` with `GraphBuilder`
+- `02_llm_goal_directed_agent.py` — LLM agent with streaming
+- `03_multi_agent_negotiation.py` — Two agents + ConsensusNegotiator subgraphs
+- `04_human_in_the_loop.py` — Custom review node for human approval
+- `05_hierarchical_goals.py` — GoalTree + per-leaf subgraphs
+- `06_benchmark_measurement.py` — Stream events → measurement bridge
+- `07_react_research_agent.py` — ReAct agent with tool metadata
+- `08_constraint_aware_planning.py` — SafetyChecker + BudgetChecker streaming
+
+### Tests
+
+- **69 new tests** in `tests/graph/`: test_state, test_nodes, test_edges, test_graph, test_builder, test_prebuilt, test_multi_agent, test_streaming.
+- **449 total tests** (380 original + 69 new), all passing.
+- Parity test: graph produces comparable results to legacy `SyncAgenticLoop`.
+
+---
+
 ## [0.1.0] — 2026-02-10
 
 Initial release implementing the full Synthetic Teleology framework per Haidemariam (2026).

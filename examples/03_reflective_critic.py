@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import time
 
-from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import ObjectiveVector, StateSnapshot
 from synthetic_teleology.services.evaluation import NumericEvaluator, ReflectiveEvaluator
 
@@ -41,7 +41,10 @@ def main() -> None:
     print(f"  Goal target: {objective.values}")
     print(f"  States: {oscillating_values}\n")
 
-    print(f"{'Step':>4s}  {'State':>6s}  {'Raw Score':>10s}  {'Raw Conf':>10s}  {'Refl Score':>10s}  {'Refl Conf':>10s}")
+    print(
+        f"{'Step':>4s}  {'State':>6s}  {'Raw Score':>10s}  "
+        f"{'Raw Conf':>10s}  {'Refl Score':>10s}  {'Refl Conf':>10s}"
+    )
     print("-" * 65)
 
     for i, val in enumerate(oscillating_values):

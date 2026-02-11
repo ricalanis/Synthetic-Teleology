@@ -13,13 +13,10 @@ Run:
 
 from __future__ import annotations
 
-import time
-
 from synthetic_teleology.domain.events import GoalRevised
 from synthetic_teleology.domain.values import GoalRevision
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry
 from synthetic_teleology.measurement.engine import MetricsEngine
-from synthetic_teleology.measurement.report import MetricsReport
 
 
 def _build_synthetic_log(
@@ -115,7 +112,7 @@ def main() -> None:
     print()
 
     # -- Compute all agents at once -------------------------------------------
-    all_results = engine.compute_all_agents({
+    _all_results = engine.compute_all_agents({
         "agent-stable": log_a,
         "agent-volatile": log_b,
     })

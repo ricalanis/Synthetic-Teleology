@@ -1,5 +1,39 @@
 # Architecture Decisions
 
+## 2026-02-10: LangGraph Migration (v0.2.0)
+
+### Decision: Replace Custom Agentic Loop with LangGraph StateGraph
+- **Context:** The v0.1.0 custom `SyncAgenticLoop` / `AsyncAgenticLoop` worked but was isolated from the LangGraph ecosystem (checkpointing, streaming, human-in-the-loop, LangGraph Studio).
+- **Choice:** Create a new `graph/` package that implements the teleological loop as a LangGraph `StateGraph`. The 10-step loop becomes 8 nodes + 2 conditional edges. Strategy services (evaluators, planners, etc.) are injected via the state dict.
+- **Rationale:** LangGraph provides battle-tested orchestration (checkpointing, streaming, interrupts, subgraphs) without reimplementing these features. The teleological theory layer (domain, services) remains unchanged — only the orchestration layer is replaced.
+
+### Decision: TypedDict State (Not Pydantic)
+- **Context:** LangGraph supports both TypedDict and Pydantic for state schemas.
+- **Choice:** `TeleologicalState(TypedDict, total=False)` with `Annotated[list, operator.add]` for append-only channels.
+- **Rationale:** TypedDict is lightweight, requires no extra dependencies, and works well with LangGraph's channel system. `total=False` allows partial state updates from nodes. The `operator.add` reducer enables event accumulation without full state replacement.
+
+### Decision: No `from __future__ import annotations` in State/Schema Files
+- **Context:** LangGraph uses `get_type_hints(..., include_extras=True)` at runtime to resolve TypedDict annotations.
+- **Choice:** Use explicit imports instead of forward references in `state.py` and `multi_agent.py`.
+- **Rationale:** `from __future__ import annotations` converts all annotations to strings, which breaks LangGraph's runtime type resolution. This is a known LangGraph/Python 3.11 compatibility constraint.
+
+### Decision: GraphBuilder Returns `(app, initial_state)` Tuple
+- **Context:** Unlike the old `AgentBuilder.build()` which returned a configured agent, the graph needs both the compiled graph and an initial state dict.
+- **Choice:** `GraphBuilder.build()` returns a `(CompiledStateGraph, dict)` tuple.
+- **Rationale:** The initial state contains injected strategies (evaluator, planner, etc.) as values in the dict. This is the cleanest way to pass non-serializable callables into the graph without global state.
+
+### Decision: Deprecate Rather Than Remove Legacy Loop
+- **Context:** 380 existing tests use `SyncAgenticLoop`. Breaking them would reduce confidence in the migration.
+- **Choice:** Add `DeprecationWarning` to `SyncAgenticLoop.__init__` and `AsyncAgenticLoop.__init__`. Keep all existing tests passing.
+- **Rationale:** Gradual migration path. Users can switch at their own pace. The parity test (`test_graph.py::TestGraphParityWithSyncLoop`) ensures the graph produces comparable results.
+
+### Decision: Multi-Agent via Subgraph Composition
+- **Context:** Multi-agent coordination needs each agent to run its own teleological loop, then negotiate.
+- **Choice:** `build_multi_agent_graph()` creates per-agent nodes that internally invoke `build_teleological_graph()` as subgraphs. A negotiation node runs between rounds.
+- **Rationale:** LangGraph subgraph composition is the natural pattern. Each agent's subgraph is fully independent, enabling different configurations per agent.
+
+---
+
 ## 2026-02-10: Overall Architecture
 
 ### Decision: Domain-Driven Design with Bounded Contexts

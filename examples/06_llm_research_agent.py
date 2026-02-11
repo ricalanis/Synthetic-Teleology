@@ -21,16 +21,15 @@ from __future__ import annotations
 import json
 import time
 
-from synthetic_teleology.domain.enums import Direction
+from synthetic_teleology.agents.llm import LLMAgent, LLMAgentConfig
 from synthetic_teleology.domain.entities import Goal
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.domain.values import (
     ActionSpec,
     ObjectiveVector,
     StateSnapshot,
 )
-from synthetic_teleology.agents.llm import LLMAgent, LLMAgentConfig
 from synthetic_teleology.infrastructure.event_bus import EventBus
-
 
 # -- Mock LLM Provider (no API keys needed) --------------------------------
 

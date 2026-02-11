@@ -1,5 +1,11 @@
 """Agentic loop implementation for the Synthetic Teleology framework.
 
+.. deprecated:: 0.2.0
+    The loop classes in this module are deprecated in favour of the
+    LangGraph-native implementation in :mod:`synthetic_teleology.graph`.
+    Use :func:`~synthetic_teleology.graph.build_teleological_graph` or
+    :class:`~synthetic_teleology.graph.GraphBuilder` instead.
+
 Implements the Template Method pattern for the core teleological loop:
 perceive -> evaluate -> revise -> check constraints -> plan -> filter ->
 act -> transition -> emit event -> check stop.
@@ -21,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -266,6 +273,9 @@ class BaseAgenticLoop(ABC):
 class SyncAgenticLoop(BaseAgenticLoop):
     """Synchronous implementation of the teleological loop.
 
+    .. deprecated:: 0.2.0
+        Use :func:`~synthetic_teleology.graph.build_teleological_graph` instead.
+
     Parameters
     ----------
     evaluator:
@@ -311,6 +321,12 @@ class SyncAgenticLoop(BaseAgenticLoop):
         act_fn: Any = None,
         transition_fn: Any = None,
     ) -> None:
+        warnings.warn(
+            "SyncAgenticLoop is deprecated, use "
+            "synthetic_teleology.graph.build_teleological_graph() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             evaluator=evaluator,
             goal_updater=goal_updater,
@@ -532,6 +548,9 @@ class SyncAgenticLoop(BaseAgenticLoop):
 class AsyncAgenticLoop(BaseAgenticLoop):
     """Asynchronous implementation of the teleological loop.
 
+    .. deprecated:: 0.2.0
+        Use :func:`~synthetic_teleology.graph.build_teleological_graph` instead.
+
     Parameters
     ----------
     evaluator:
@@ -580,6 +599,12 @@ class AsyncAgenticLoop(BaseAgenticLoop):
         transition_fn: Any = None,
         step_delay: float = 0.0,
     ) -> None:
+        warnings.warn(
+            "AsyncAgenticLoop is deprecated, use "
+            "synthetic_teleology.graph.build_teleological_graph() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             evaluator=evaluator,
             goal_updater=goal_updater,
