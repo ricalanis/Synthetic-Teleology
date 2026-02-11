@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import sys
 
-from synthetic_teleology.graph import GraphBuilder
+from synthetic_teleology.graph import GraphBuilder, WorkingMemory
 
 
 def main() -> None:
@@ -28,6 +28,18 @@ def main() -> None:
         print("No API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
         print("(This example requires a real LLM. See 01_basic_loop.py for numeric mode.)")
         sys.exit(1)
+
+    # -- Working memory gives the agent an environment to reason about --
+    memory = WorkingMemory(
+        initial_context=(
+            "Team productivity data (Q4 2025):\n"
+            "- Sprint velocity: 42 pts/sprint (down from 55 in Q2)\n"
+            "- PR review time: avg 3.2 days (target: <1 day)\n"
+            "- Meeting load: 18 hrs/week per IC (up 40% YoY)\n"
+            "- On-call incidents: 12/month (up from 4 in Q2)\n"
+            "- Developer satisfaction (eNPS): 22 (down from 45)"
+        ),
+    )
 
     # -- Build LLM-powered teleological agent --
     app, initial_state = (
@@ -44,6 +56,10 @@ def main() -> None:
         .with_constraints(
             "Do not recommend reducing headcount",
             "Solutions must be implementable within 1 quarter",
+        )
+        .with_environment(
+            perceive_fn=memory.perceive,
+            transition_fn=memory.record,
         )
         .with_max_steps(5)
         .with_num_hypotheses(3)

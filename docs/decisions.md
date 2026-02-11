@@ -1,5 +1,24 @@
 # Architecture Decisions
 
+## 2026-02-11: Agent Feedback Loop (v1.2.0)
+
+### Decision: Observation Enrichment Over Service Signature Changes
+- **Context:** LLM services (evaluator, planner, reviser) had no memory of previous steps — they saw only the current snapshot.
+- **Choice:** Enrich the `observation` text in `perceive_node` with action results, eval trends, and goal revision counts. All LLM services read `{observation}` in their prompts, so enriching observation = enriching all prompts automatically.
+- **Rationale:** Zero changes to `BaseGoalUpdater` or any of its 7 concrete subclasses. No new parameters on any service. The enrichment is invisible to numeric-mode agents (no feedback on step 1). Fully backward compatible.
+
+### Decision: WorkingMemory as Graph-Layer Utility
+- **Context:** LLM examples 11+12 had no `perceive_fn`, so the agent reasoned in a vacuum with a static "Awaiting observation" message.
+- **Choice:** `WorkingMemory` provides `perceive` and `record` callbacks that accumulate agent actions as a perception source. It lives in `graph/` (not `services/`) because it's a graph-layer concern.
+- **Rationale:** Closes the perception-action loop for LLM agents that don't have external APIs. The `record()` callback accepts 1 or 2 args to match `act_node`'s `inspect.signature` detection for constraint-conditioned transitions.
+
+### Decision: action_feedback as Append-Only State Channel
+- **Context:** `act_node` captured tool results in events only; `perceive_node` never saw them.
+- **Choice:** New `action_feedback: Annotated[list, operator.add]` channel in `TeleologicalState`. Each entry has action name, tool_name, result, step, timestamp.
+- **Rationale:** Append-only channels (like `events`, `eval_history`) are the established pattern for accumulating data across iterations. Keeping feedback separate from events makes it easy for `perceive_node` to read recent results without filtering.
+
+---
+
 ## 2026-02-11: Full Paper Alignment (v1.1.0)
 
 ### Decision: Three-Tier TC Metric Computation

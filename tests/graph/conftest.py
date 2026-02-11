@@ -106,5 +106,7 @@ def initial_state(
         "goal_history": [],
         "eval_history": [],
         "action_history": [],
+        "reasoning_trace": [],
+        "action_feedback": [],
         "metadata": {},
     }

@@ -414,6 +414,7 @@ class GraphBuilder:
             "eval_history": [],
             "action_history": [],
             "reasoning_trace": [],
+            "action_feedback": [],
             "metadata": self._metadata,
         }
 
@@ -476,6 +477,7 @@ class GraphBuilder:
             "eval_history": [],
             "action_history": [],
             "reasoning_trace": [],
+            "action_feedback": [],
             "metadata": self._metadata,
         }
 

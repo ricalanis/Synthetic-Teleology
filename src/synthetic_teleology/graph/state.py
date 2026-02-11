@@ -89,6 +89,7 @@ class TeleologicalState(TypedDict, total=False):
     eval_history: Annotated[list, operator.add]
     action_history: Annotated[list, operator.add]
     reasoning_trace: Annotated[list, operator.add]  # NEW: all LLM reasoning
+    action_feedback: Annotated[list, operator.add]  # NEW: structured action results
 
     # -- Optional integrations ------------------------------------------------
     knowledge_store: Any                             # KnowledgeStore instance

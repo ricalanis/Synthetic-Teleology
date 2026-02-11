@@ -55,6 +55,7 @@ from synthetic_teleology.graph.streaming import (
     format_stream_events,
     stream_to_agent_log_entries,
 )
+from synthetic_teleology.graph.working_memory import WorkingMemory
 
 __all__ = [
     "TeleologicalState",
@@ -90,4 +91,6 @@ __all__ = [
     "format_stream_events",
     "collect_stream_events",
     "stream_to_agent_log_entries",
+    # Working memory
+    "WorkingMemory",
 ]

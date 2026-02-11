@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import sys
 
-from synthetic_teleology.graph import GraphBuilder
+from synthetic_teleology.graph import GraphBuilder, WorkingMemory
 
 # -- Define LangChain-compatible tools --
 
@@ -56,6 +56,18 @@ def main() -> None:
 
     tools = [SearchTool(), CalculatorTool(), DatabaseTool()]
 
+    # Working memory provides initial sales context for the agent
+    memory = WorkingMemory(
+        initial_context=(
+            "Q4 Sales Summary (preliminary):\n"
+            "- Total revenue: $2.1M (Q3: $1.9M)\n"
+            "- New customers: 34 (Q3: 28)\n"
+            "- Churn rate: 4.2% (Q3: 3.8%)\n"
+            "- Average deal size: $18.5k (Q3: $16.2k)\n"
+            "- Pipeline value: $4.8M"
+        ),
+    )
+
     app, initial_state = (
         GraphBuilder("tool-agent")
         .with_model(model)
@@ -69,6 +81,10 @@ def main() -> None:
         )
         .with_tools(*tools)
         .with_constraints("Use only authorized data sources")
+        .with_environment(
+            perceive_fn=memory.perceive,
+            transition_fn=memory.record,
+        )
         .with_max_steps(4)
         .with_num_hypotheses(2)
         .build()

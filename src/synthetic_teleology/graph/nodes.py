@@ -15,9 +15,54 @@ import logging
 import time
 from typing import Any
 
-from synthetic_teleology.domain.values import EvalSignal
+from synthetic_teleology.domain.values import EvalSignal, StateSnapshot
 
 logger = logging.getLogger(__name__)
+
+
+def _build_enriched_observation(base_observation: str, state: dict[str, Any]) -> str:
+    """Append action results, eval trends, and goal revision count to the observation.
+
+    Returns ``base_observation`` unchanged on step 1 (no history exists yet).
+    """
+    step = state.get("step", 0)
+    if step <= 1:
+        return base_observation
+
+    parts: list[str] = []
+
+    # Recent action results (last 3)
+    feedback = state.get("action_feedback", [])
+    if feedback:
+        recent = feedback[-3:]
+        lines = []
+        for fb in recent:
+            result_str = str(fb.get("result", ""))[:300]
+            tool = fb.get("tool_name") or "direct"
+            lines.append(f"  - {fb.get('action', '?')} (via {tool}): {result_str}")
+        parts.append("Recent action results:\n" + "\n".join(lines))
+
+    # Eval score trend (last 5)
+    eval_history = state.get("eval_history", [])
+    if eval_history:
+        recent_evals = eval_history[-5:]
+        scores = [
+            f"{getattr(e, 'score', e.get('score', 0) if isinstance(e, dict) else 0):.2f}"
+            for e in recent_evals
+        ]
+        parts.append(f"Eval score trend: {' -> '.join(scores)}")
+
+    # Goal revision count
+    goal_history = state.get("goal_history", [])
+    if goal_history:
+        n = len(goal_history)
+        parts.append(f"{n} goal revision(s) so far")
+
+    if not parts:
+        return base_observation
+
+    enrichment = "\n\n".join(parts)
+    return f"{base_observation}\n\n--- History ---\n{enrichment}"
 
 
 def perceive_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -25,6 +70,11 @@ def perceive_node(state: dict[str, Any]) -> dict[str, Any]:
 
     Reads ``perceive_fn`` and ``step`` from state.
     Writes ``state_snapshot``, ``observation``, and incremented ``step``.
+
+    After step 1, enriches the observation with action feedback, eval score
+    trends, and goal revision counts so that downstream LLM services
+    (evaluator, planner, reviser) see history through the ``{observation}``
+    prompt variable.
     """
     perceive_fn = state["perceive_fn"]
     step = state.get("step", 0) + 1
@@ -34,6 +84,25 @@ def perceive_node(state: dict[str, Any]) -> dict[str, Any]:
     observation = getattr(snapshot, "observation", "") or ""
     if not observation and snapshot.values:
         observation = f"State values at step {step}: {snapshot.values}"
+
+    # Enrich observation with history
+    observation = _build_enriched_observation(observation, state)
+
+    # Inject recent action results into snapshot context
+    feedback = state.get("action_feedback", [])
+    context = dict(snapshot.context) if snapshot.context else {}
+    if feedback:
+        context["recent_action_results"] = feedback[-3:]
+
+    # Reconstruct snapshot with enriched observation + context (frozen dataclass)
+    snapshot = StateSnapshot(
+        timestamp=snapshot.timestamp,
+        values=snapshot.values,
+        observation=observation,
+        context=context,
+        source=snapshot.source,
+        metadata=snapshot.metadata,
+    )
 
     logger.debug("perceive_node: step=%d dim=%d", step, snapshot.dimension)
     return {
@@ -352,10 +421,22 @@ def act_node(state: dict[str, Any]) -> dict[str, Any]:
     if tool_result is not None:
         event["tool_result"] = str(tool_result)[:500]
 
+    # Build structured feedback for the perception-action loop
+    feedback_entry = []
+    if action is not None:
+        feedback_entry = [{
+            "action": action.name,
+            "tool_name": getattr(action, "tool_name", None),
+            "result": tool_result,
+            "step": state.get("step", 0),
+            "timestamp": time.time(),
+        }]
+
     history_entry = [action] if action is not None else []
     return {
         "executed_action": action,
         "action_history": history_entry,
+        "action_feedback": feedback_entry,
         "events": [event],
     }
 

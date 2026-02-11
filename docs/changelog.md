@@ -2,6 +2,48 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [1.2.0] — 2026-02-11
+
+### Agent Feedback Loop — Closes 3 Structural Gaps
+
+Agents built with the toolkit now behave like paper-described agents: tool/action results flow back into perception, LLM services see history through enriched observations, and LLM examples have a real environment to reason about.
+
+#### Gap 1: Action results flow back into perception
+- New `action_feedback: Annotated[list, operator.add]` state channel in `TeleologicalState`
+- `act_node` emits structured feedback entries (action name, tool_name, result, step, timestamp)
+- `perceive_node` injects `action_feedback[-3:]` into `snapshot.context["recent_action_results"]`
+
+#### Gap 2: LLM services see history without signature changes
+- New `_build_enriched_observation()` helper appends to the observation text:
+  - Recent action results (last 3): action name, tool, truncated result
+  - Eval score trend (last 5): `0.30 -> 0.50 -> 0.70`
+  - Goal revision count: "N revision(s) so far"
+- No-op on step 1 (no history exists yet)
+- All 3 LLM services (LLMEvaluator, LLMPlanner, LLMReviser) automatically see history through their `{observation}` prompt variable — zero changes to `BaseGoalUpdater` or any of its 7 concrete subclasses
+
+#### Gap 3: LLM examples have an environment
+- New `WorkingMemory` utility (`graph/working_memory.py`):
+  - `perceive()` callback returns accumulated memory as `StateSnapshot.observation`
+  - `record()` callback accepts 1 or 2 args (plain + constraint-conditioned signatures)
+  - FIFO eviction at configurable `max_entries`
+- Examples 11 (quickstart) and 12 (tools) updated with `WorkingMemory` and realistic initial context
+
+#### Files Changed
+- `graph/state.py` — +1 field: `action_feedback`
+- `graph/nodes.py` — modified `perceive_node` (enrichment) + `act_node` (emit feedback) + new `_build_enriched_observation` helper
+- `graph/builder.py` — `action_feedback: []` in both build methods
+- `graph/working_memory.py` — **NEW**: WorkingMemory utility
+- `graph/__init__.py` — added WorkingMemory export
+- `examples/conceptual/11_llm_quickstart.py` — WorkingMemory + `.with_environment()`
+- `examples/conceptual/12_llm_tools.py` — WorkingMemory + `.with_environment()`
+
+#### Stats
+- **636 tests** (617 + 19 new), all passing
+- 19 new tests in `test_working_memory.py` (8) + `test_action_feedback.py` (11)
+- Lint clean on all changed files
+
+---
+
 ## [1.1.0] — 2026-02-11
 
 ### Major: Full Haidemariam (2026) Theoretical Alignment
