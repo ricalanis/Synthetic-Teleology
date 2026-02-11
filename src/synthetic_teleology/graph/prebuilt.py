@@ -34,6 +34,8 @@ def create_llm_agent(
     goal_achieved_threshold: float = 0.9,
     checkpointer: Any | None = None,
     agent_id: str = "llm-agent",
+    interrupt_before: list[str] | None = None,
+    interrupt_after: list[str] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Create an LLM-powered teleological agent.
 
@@ -115,6 +117,8 @@ def create_llm_agent(
         )
     if checkpointer is not None:
         builder.with_checkpointer(checkpointer)
+    if interrupt_before or interrupt_after:
+        builder.with_human_approval(before=interrupt_before, after=interrupt_after)
 
     return builder.build()
 

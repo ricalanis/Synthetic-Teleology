@@ -30,6 +30,7 @@ from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry, EventCollector
 from synthetic_teleology.measurement.engine import MetricsEngine
+from synthetic_teleology.measurement.metrics.empowerment import Empowerment
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.reflective_efficiency import ReflectiveEfficiency
 from synthetic_teleology.measurement.metrics.teleological_coherence import TeleologicalCoherence
@@ -182,6 +183,7 @@ class KnowledgeSynthesisBenchmark(BaseBenchmark):
         synthesis_threshold: float = 1.0,
         knowledge_decay: float = 0.01,
         novelty_decay: float = 0.05,
+        critic_interval: int = 0,
     ) -> None:
         self._topics = topics
         self._num_topics = len(topics)
@@ -193,6 +195,7 @@ class KnowledgeSynthesisBenchmark(BaseBenchmark):
         self._synthesis_threshold = synthesis_threshold
         self._knowledge_decay = knowledge_decay
         self._novelty_decay = novelty_decay
+        self._critic_interval = critic_interval
         self._engine: MetricsEngine | None = None
 
     def _build_objective(self) -> ObjectiveVector:
@@ -211,12 +214,13 @@ class KnowledgeSynthesisBenchmark(BaseBenchmark):
         return ObjectiveVector(values=values, directions=directions)
 
     def setup(self) -> None:
-        """Create metrics engine with IY, RE, TC metrics."""
+        """Create metrics engine with IY, RE, TC, Empowerment metrics."""
         self._engine = MetricsEngine(
             metrics=[
                 InnovationYield(),
                 ReflectiveEfficiency(),
                 TeleologicalCoherence(),
+                Empowerment(),
             ]
         )
 

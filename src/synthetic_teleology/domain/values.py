@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .enums import ConstraintType, Direction, StateSource
+from .enums import ConstraintType, Direction, GoalOrigin, StateSource
 
 # ---------------------------------------------------------------------------
 # ObjectiveVector
@@ -269,3 +269,67 @@ class Hypothesis:
     reasoning: str = ""
     expected_outcome: str = ""
     risk_assessment: str = ""
+
+
+# ---------------------------------------------------------------------------
+# GoalProvenance
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GoalProvenance:
+    """Immutable provenance record for a goal.
+
+    Tracks who/what created or revised a goal, enabling full lineage tracing
+    per Haidemariam (2026) Section on intentional grounding.
+    """
+
+    origin: GoalOrigin = GoalOrigin.DESIGN
+    source_agent_id: str = ""
+    source_description: str = ""
+    timestamp: float = 0.0
+    parent_provenance_id: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# GoalAuditEntry
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GoalAuditEntry:
+    """Immutable entry in the goal audit trail.
+
+    Captures a single revision event with full context for replay/analysis.
+    """
+
+    entry_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    timestamp: float = 0.0
+    goal_id: str = ""
+    previous_goal_id: str = ""
+    revision_reason: str = ""
+    eval_score: float = 0.0
+    eval_confidence: float = 1.0
+    provenance: GoalProvenance | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# KnowledgeEntry
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class KnowledgeEntry:
+    """Immutable entry in the metacognitive knowledge store.
+
+    Represents a piece of learned knowledge with typed metadata, tags,
+    and source tracking.
+    """
+
+    entry_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    key: str = ""
+    value: Any = None
+    source: str = ""
+    tags: tuple[str, ...] = ()
+    timestamp: float = 0.0
+    confidence: float = 1.0
+    metadata: Mapping[str, Any] = field(default_factory=dict)

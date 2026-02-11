@@ -4,6 +4,8 @@ Builds a coordinator graph that runs per-agent teleological subgraphs
 and negotiates shared objectives using either numeric averaging or
 LLM-powered negotiation.
 
+Supports parallel execution via LangGraph ``Send`` API for fan-out/fan-in.
+
 Note: No ``from __future__ import annotations`` — LangGraph needs runtime
 type resolution for TypedDict schemas.
 """
@@ -24,6 +26,16 @@ from synthetic_teleology.services.coordination import BaseNegotiator, ConsensusN
 logger = logging.getLogger(__name__)
 
 
+def _merge_agent_results(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> dict[str, Any]:
+    """Custom reducer for merging parallel agent results."""
+    merged = dict(left)
+    merged.update(right)
+    return merged
+
+
 @dataclass
 class AgentConfig:
     """Configuration for one agent in a multi-agent graph.
@@ -35,14 +47,15 @@ class AgentConfig:
 
     agent_id: str
     goal: Goal | str = ""
-    model: Any = None                              # NEW: per-agent LangChain model override
-    tools: list[Any] = field(default_factory=list)  # NEW: per-agent tools
-    criteria: list[str] = field(default_factory=list)  # NEW: per-agent criteria
-    constraints: list[str] = field(default_factory=list)  # NEW: per-agent constraints
+    model: Any = None
+    tools: list[Any] = field(default_factory=list)
+    criteria: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
     perceive_fn: Callable | None = None
     transition_fn: Callable | None = None
     act_fn: Callable | None = None
     max_steps_per_round: int = 10
+    bdi_agent: Any = None
 
 
 class MultiAgentState(TypedDict, total=False):
@@ -57,19 +70,19 @@ class MultiAgentState(TypedDict, total=False):
     goal_achieved_threshold: float
 
     # LLM configuration
-    model: Any                                     # NEW: shared model for negotiation
-    tools: list[Any]                               # NEW: shared tools
+    model: Any
+    tools: list[Any]
 
     # Coordination
-    agent_results: dict[str, Any]
+    agent_results: Annotated[dict[str, Any], _merge_agent_results]
     shared_objective: ObjectiveVector | None
-    shared_direction: str                          # NEW: LLM negotiation output
+    shared_direction: str
     negotiation_round: int
     max_rounds: int
 
     # Accumulation
     events: Annotated[list, operator.add]
-    reasoning_trace: Annotated[list, operator.add]  # NEW: negotiation reasoning
+    reasoning_trace: Annotated[list, operator.add]
 
 
 def _make_agent_node(
@@ -101,6 +114,11 @@ def _run_llm_agent(
     from synthetic_teleology.graph.builder import GraphBuilder
 
     goal_text = config.goal if isinstance(config.goal, str) else config.goal.description
+
+    # Prepend shared direction if available from negotiation
+    shared_direction = state.get("shared_direction", "")
+    if shared_direction:
+        goal_text = f"{goal_text}\n\nShared direction from negotiation: {shared_direction}"
 
     builder = (
         GraphBuilder(config.agent_id)
@@ -180,15 +198,14 @@ def _collect_agent_result(
     result: dict[str, Any],
 ) -> dict[str, Any]:
     """Collect agent results into the multi-agent state."""
-    agent_results = dict(state.get("agent_results", {}))
-    agent_results[config.agent_id] = {
+    agent_results = {config.agent_id: {
         "final_goal": result.get("goal"),
         "eval_signal": result.get("eval_signal"),
         "steps": result.get("step", 0),
         "stop_reason": result.get("stop_reason"),
         "events": result.get("events", []),
         "reasoning_trace": result.get("reasoning_trace", []),
-    }
+    }}
 
     event = {
         "type": "agent_round_completed",
@@ -204,7 +221,10 @@ def _collect_agent_result(
     }
 
 
-def _negotiate_node(negotiator: BaseNegotiator) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def _negotiate_node(
+    negotiator: BaseNegotiator,
+    negotiation_model: Any = None,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Create a negotiation node using the provided strategy."""
 
     def negotiate(state: dict[str, Any]) -> dict[str, Any]:
@@ -212,45 +232,101 @@ def _negotiate_node(negotiator: BaseNegotiator) -> Callable[[dict[str, Any]], di
         if not agent_results:
             return {}
 
-        objectives = []
-        for _agent_id, result in agent_results.items():
-            goal = result.get("final_goal")
-            if goal is not None and goal.objective is not None:
-                objectives.append(goal.objective)
+        # Try LLM negotiation if model provided and agents have text goals
+        if negotiation_model is not None:
+            return _llm_negotiate(state, agent_results, negotiation_model)
 
-        if len(objectives) < 2:
-            if objectives:
-                return {"shared_objective": objectives[0]}
-            return {}
+        return _numeric_negotiate(state, agent_results)
 
-        # Use simple averaging for graph-based negotiation (no agent objects needed)
-        import numpy as np
+    return negotiate
 
-        values_list = [np.array(obj.values) for obj in objectives]
-        mean_values = np.mean(values_list, axis=0)
-        ref = objectives[0]
 
-        shared = ObjectiveVector(
-            values=tuple(float(v) for v in mean_values),
-            directions=ref.directions,
-            weights=ref.weights,
-        )
+def _llm_negotiate(
+    state: dict[str, Any],
+    agent_results: dict[str, Any],
+    model: Any,
+) -> dict[str, Any]:
+    """LLM-powered negotiation."""
+    from synthetic_teleology.services.llm_negotiation import LLMNegotiator
 
+    negotiator = LLMNegotiator(
+        model=model,
+        max_dialogue_rounds=state.get("max_dialogue_rounds", 3),
+    )
+
+    try:
+        consensus = negotiator.negotiate(agent_results)
         round_num = state.get("negotiation_round", 0) + 1
+
         event = {
-            "type": "negotiation_completed",
+            "type": "llm_negotiation_completed",
             "round": round_num,
-            "shared_objective": shared.values,
+            "shared_direction": consensus.shared_direction[:200],
+            "confidence": consensus.confidence,
             "timestamp": time.time(),
         }
 
-        return {
-            "shared_objective": shared,
+        result: dict[str, Any] = {
+            "shared_direction": consensus.shared_direction,
             "negotiation_round": round_num,
             "events": [event],
+            "reasoning_trace": [
+                {
+                    "node": "negotiate",
+                    "round": round_num,
+                    "reasoning": consensus.reasoning,
+                    "timestamp": time.time(),
+                }
+            ],
         }
 
-    return negotiate
+        return result
+    except Exception as exc:
+        logger.warning("LLM negotiation failed, falling back to numeric: %s", exc)
+        return _numeric_negotiate(state, agent_results)
+
+
+def _numeric_negotiate(
+    state: dict[str, Any],
+    agent_results: dict[str, Any],
+) -> dict[str, Any]:
+    """Numeric averaging negotiation (backward compat)."""
+    objectives = []
+    for _agent_id, result in agent_results.items():
+        goal = result.get("final_goal")
+        if goal is not None and goal.objective is not None:
+            objectives.append(goal.objective)
+
+    if len(objectives) < 2:
+        if objectives:
+            return {"shared_objective": objectives[0]}
+        return {}
+
+    import numpy as np
+
+    values_list = [np.array(obj.values) for obj in objectives]
+    mean_values = np.mean(values_list, axis=0)
+    ref = objectives[0]
+
+    shared = ObjectiveVector(
+        values=tuple(float(v) for v in mean_values),
+        directions=ref.directions,
+        weights=ref.weights,
+    )
+
+    round_num = state.get("negotiation_round", 0) + 1
+    event = {
+        "type": "negotiation_completed",
+        "round": round_num,
+        "shared_objective": shared.values,
+        "timestamp": time.time(),
+    }
+
+    return {
+        "shared_objective": shared,
+        "negotiation_round": round_num,
+        "events": [event],
+    }
 
 
 def _should_continue_multi(state: dict[str, Any]) -> str:
@@ -279,11 +355,11 @@ def build_multi_agent_graph(
     negotiation_strategy: BaseNegotiator | None = None,
     max_rounds: int = 5,
     checkpointer: Any = None,
+    negotiation_model: Any = None,
+    max_dialogue_rounds: int = 3,
+    parallel: bool = False,
 ) -> Any:
     """Build a multi-agent coordination graph.
-
-    Each agent runs its own teleological subgraph, then a negotiation
-    step produces a shared objective for the next round.
 
     Parameters
     ----------
@@ -295,6 +371,13 @@ def build_multi_agent_graph(
         Maximum negotiation rounds.
     checkpointer:
         Optional LangGraph checkpointer.
+    negotiation_model:
+        Optional LLM model for dialogue-based negotiation.
+    max_dialogue_rounds:
+        Rounds within each LLM negotiation dialogue.
+    parallel:
+        If True, run agents in parallel using LangGraph Send API.
+        If False, run agents sequentially (backward compat).
 
     Returns
     -------
@@ -314,22 +397,47 @@ def build_multi_agent_graph(
         graph.add_node(key, node_fn)
 
     # Add negotiation node
-    graph.add_node("negotiate", _negotiate_node(negotiator))
+    graph.add_node("negotiate", _negotiate_node(negotiator, negotiation_model))
 
-    # Wire: START -> first agent -> second agent -> ... -> check -> negotiate -> loop
-    graph.add_edge(START, agent_keys[0])
-    for i in range(len(agent_keys) - 1):
-        graph.add_edge(agent_keys[i], agent_keys[i + 1])
+    if parallel and len(agent_keys) > 1:
+        # Parallel: fan-out to all agents, then fan-in to collect_results
+        # Use a dispatch node that sends to all agents
+        def dispatch_node(state: dict[str, Any]) -> list[Any]:
+            """Fan-out: dispatch to all agent nodes."""
+            from langgraph.types import Send
+            return [Send(key, state) for key in agent_keys]
 
-    # Last agent -> conditional: continue or end
-    graph.add_conditional_edges(
-        agent_keys[-1],
-        _should_continue_multi,
-        {"negotiate": "negotiate", "__end__": END},
-    )
+        graph.add_node("dispatch", dispatch_node)
 
-    # Negotiate -> first agent (loop back)
-    graph.add_edge("negotiate", agent_keys[0])
+        # Collect results node (identity — results already merged by reducer)
+        def collect_results(state: dict[str, Any]) -> dict[str, Any]:
+            return {}
+
+        graph.add_node("collect_results", collect_results)
+
+        graph.add_edge(START, "dispatch")
+        # Each agent edge handled by Send
+        for key in agent_keys:
+            graph.add_edge(key, "collect_results")
+
+        graph.add_conditional_edges(
+            "collect_results",
+            _should_continue_multi,
+            {"negotiate": "negotiate", "__end__": END},
+        )
+        graph.add_edge("negotiate", "dispatch")
+    else:
+        # Sequential: START -> agent_0 -> agent_1 -> ... -> negotiate -> loop
+        graph.add_edge(START, agent_keys[0])
+        for i in range(len(agent_keys) - 1):
+            graph.add_edge(agent_keys[i], agent_keys[i + 1])
+
+        graph.add_conditional_edges(
+            agent_keys[-1],
+            _should_continue_multi,
+            {"negotiate": "negotiate", "__end__": END},
+        )
+        graph.add_edge("negotiate", agent_keys[0])
 
     compile_kwargs: dict[str, Any] = {}
     if checkpointer is not None:

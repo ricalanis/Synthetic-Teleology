@@ -145,8 +145,63 @@ def revise_node(state: dict[str, Any]) -> dict[str, Any]:
                 }
             ]
 
+        # Record to audit trail if available
+        audit_trail = state.get("audit_trail")
+        if audit_trail is not None:
+            try:
+                audit_trail.record(
+                    goal_id=revised.goal_id,
+                    previous_goal_id=goal.goal_id,
+                    revision_reason=event.get("type", ""),
+                    eval_score=signal.score,
+                    eval_confidence=signal.confidence,
+                    provenance=getattr(revised, "provenance", None),
+                )
+            except Exception as exc:
+                logger.warning("revise_node: audit trail record failed: %s", exc)
+
         return result
 
+    return {}
+
+
+def ground_goal_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Apply intentional grounding from external directives.
+
+    Only active when a ``grounding_manager`` is present in state.
+    The grounding manager assesses accumulated directives and may
+    adjust the goal description or criteria.
+
+    Reads ``grounding_manager``, ``goal``, ``eval_signal``.
+    Writes ``goal`` (if grounded), appends to ``reasoning_trace``.
+    """
+    grounding_manager = state.get("grounding_manager")
+    if grounding_manager is None:
+        return {}
+
+    goal = state["goal"]
+    signal = state.get("eval_signal")
+
+    try:
+        grounded_goal = grounding_manager.ground(goal, signal)
+    except Exception as exc:
+        logger.warning("ground_goal_node: grounding failed: %s", exc)
+        return {}
+
+    if grounded_goal is not None and grounded_goal.goal_id != goal.goal_id:
+        logger.info("ground_goal_node: goal grounded %s -> %s", goal.goal_id, grounded_goal.goal_id)
+        return {
+            "goal": grounded_goal,
+            "goal_history": [grounded_goal],
+            "reasoning_trace": [
+                {
+                    "node": "ground_goal",
+                    "step": state.get("step", 0),
+                    "reasoning": "Goal adjusted by intentional grounding",
+                    "timestamp": time.time(),
+                }
+            ],
+        }
     return {}
 
 
@@ -269,9 +324,20 @@ def act_node(state: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:
                 logger.warning("act_node: tool '%s' failed: %s", action.tool_name, exc)
 
-    # Transition (traditional mode)
+    # Transition — supports constraint-conditioned 2-arg signature
     if transition_fn is not None and action is not None:
-        transition_fn(action)
+        import inspect
+
+        sig = inspect.signature(transition_fn)
+        if len(sig.parameters) >= 2:
+            constraints_context = {
+                "constraints_ok": state.get("constraints_ok", True),
+                "constraint_violations": state.get("constraint_violations", []),
+                "constraint_assessments": state.get("constraint_assessments", []),
+            }
+            transition_fn(action, constraints_context)
+        else:
+            transition_fn(action)
 
     logger.debug(
         "act_node: executed action=%s", action.name if action else "None"

@@ -13,9 +13,11 @@ Available metrics
 - :class:`InnovationYield` -- diversity and novelty of actions
 - :class:`LyapunovStability` -- convergence stability of evaluation scores
 - :class:`ReasoningQuality` -- coherence of LLM reasoning traces
+- :class:`Empowerment` -- information-theoretic action influence
 """
 
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
+from synthetic_teleology.measurement.metrics.empowerment import Empowerment
 from synthetic_teleology.measurement.metrics.base import BaseMetric, MetricResult
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
@@ -29,6 +31,7 @@ __all__ = [
     "BaseMetric",
     "MetricResult",
     "Adaptivity",
+    "Empowerment",
     "GoalPersistence",
     "InnovationYield",
     "LyapunovStability",

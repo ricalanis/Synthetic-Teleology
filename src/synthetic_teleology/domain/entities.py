@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .enums import ConstraintType, GoalStatus
-from .values import ConstraintSpec, EvalSignal, GoalRevision, ObjectiveVector
+from .values import ConstraintSpec, EvalSignal, GoalProvenance, GoalRevision, ObjectiveVector
 
 # ---------------------------------------------------------------------------
 # Goal entity
@@ -43,6 +43,7 @@ class Goal:
     parent_id: str | None = None
     version: int = 1
     created_at: float = field(default_factory=time.time)
+    provenance: GoalProvenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # -- lifecycle transitions ------------------------------------------------
@@ -91,6 +92,7 @@ class Goal:
             status=GoalStatus.ACTIVE,
             parent_id=self.parent_id,
             version=self.version + 1,
+            provenance=self.provenance,
             metadata=dict(self.metadata),
         )
         revision = GoalRevision(

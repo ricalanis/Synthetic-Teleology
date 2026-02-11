@@ -25,6 +25,7 @@ from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry, EventCollector
 from synthetic_teleology.measurement.engine import MetricsEngine
+from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.normative_fidelity import NormativeFidelity
 from synthetic_teleology.measurement.metrics.reflective_efficiency import ReflectiveEfficiency
 from synthetic_teleology.measurement.metrics.teleological_coherence import TeleologicalCoherence
@@ -64,6 +65,8 @@ class ConflictingObjectivesBenchmark(BaseBenchmark):
         conflict_strength: float = 0.6,
         noise_std: float = 0.02,
         step_size: float = 0.5,
+        tradeoff_step: int | None = None,
+        tradeoff_multiplier: float = 1.5,
     ) -> None:
         if dimensions < 2:
             raise ValueError(f"dimensions must be >= 2, got {dimensions}")
@@ -77,6 +80,8 @@ class ConflictingObjectivesBenchmark(BaseBenchmark):
         self._conflict_strength = conflict_strength
         self._noise_std = noise_std
         self._step_size = step_size
+        self._tradeoff_step = tradeoff_step
+        self._tradeoff_multiplier = tradeoff_multiplier
         self._engine: MetricsEngine | None = None
 
     def _build_conflicting_objective(
@@ -138,12 +143,13 @@ class ConflictingObjectivesBenchmark(BaseBenchmark):
         return dynamics_fn
 
     def setup(self) -> None:
-        """Create metrics engine with TC, RE, NF metrics."""
+        """Create metrics engine with TC, RE, NF, IY metrics."""
         self._engine = MetricsEngine(
             metrics=[
                 TeleologicalCoherence(),
                 ReflectiveEfficiency(),
                 NormativeFidelity(),
+                InnovationYield(),
             ]
         )
 

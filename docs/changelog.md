@@ -2,6 +2,73 @@
 
 All notable changes to the Synthetic Teleology Framework.
 
+## [1.1.0] — 2026-02-11
+
+### Major: Full Haidemariam (2026) Theoretical Alignment
+
+Closes all 15 identified gaps between the library and the paper, bringing alignment from A- (91%) to A+/98%.
+
+#### Phase 1: Fixed Metrics + Empowerment
+- **Teleological Coherence (TC)** — rewritten with 3-tier computation: Pearson correlation (primary), responsive-revision proxy, legacy mean-score fallback
+- **Innovation Yield (IY)** — attribution formula: `0.6 * novelty_ratio + 0.4 * quality_improvement` when revisions present, unique/total fallback otherwise
+- **Empowerment** — new information-theoretic metric: `I(A; S'|S)` mutual information between actions and state transitions (opt-in via `engine.add_metric(Empowerment())`)
+- `AgentLogEntry.goal_values` field added for correlation-based TC
+
+#### Phase 2: Self-Modeling + Active Inference
+- **`SelfModelingEvaluator`** — Decorator wrapping any evaluator; adds linear regression self-model, surprise EMA tracking, confidence adjustment, `recommends_goal_edit` property
+- **`ActiveInferenceUpdater`** — Expected free energy decomposition: pragmatic + epistemic components; triggers revision when free energy and prediction error exceed thresholds
+- New enum values: `RevisionReason.ACTIVE_INFERENCE`, `RevisionReason.DIALOGUE`
+
+#### Phase 3: Goal Provenance + Audit Trail + Knowledge Store
+- **`GoalProvenance`** value object (origin, source_agent_id, source_description, timestamp)
+- **`GoalOrigin`** enum: DESIGN, USER, NORMATIVE, ENDOGENOUS, NEGOTIATED, PROPAGATED
+- **`GoalAuditTrail`** — serializable audit trail with `record()`, `query()`, `to_json()`/`from_json()`
+- **`KnowledgeStore`** — thread-safe shared key-value store with tag/source queries, EventBus integration
+- **`KnowledgeUpdated`** domain event
+- Wired into graph: `TeleologicalState` fields, `GraphBuilder.with_knowledge_store()`, `with_audit_trail()`
+
+#### Phase 4: Constraint-Conditioned Transitions + Human-in-the-Loop
+- `act_node` detects 2-arg `transition_fn(action, constraints_context)` via `inspect.signature`
+- `build_teleological_graph()` accepts `interrupt_before`/`interrupt_after` for human-in-the-loop
+- `GraphBuilder.with_human_approval(before=[], after=[])`
+- `ground_goal_node` for intentional grounding
+
+#### Phase 5: LLM Multi-Agent Negotiation + Parallel Execution
+- **`LLMNegotiator`** — 3-phase protocol: Propose → Critique → Synthesize; operates on `agent_results` dict
+- **`build_multi_agent_graph()`** — new params: `negotiation_model`, `max_dialogue_rounds`, `parallel`
+- Parallel execution via LangGraph `Send` API with custom `_merge_agent_results` reducer
+- `shared_direction` prepended to agent goals in LLM mode
+
+#### Phase 6: Evolving Constraints + Distributed Grounding
+- **`EvolvingConstraintManager`** — LLM-based co-evolutionary constraint management; analyzes violation patterns, proposes additions/removals/modifications
+- **`IntentionalGroundingManager`** — accumulates external directives (user, normative, negotiated); LLM or rule-based grounding assessment
+- **`GoalSource`** enum, **`ExternalDirective`** model
+
+#### Phase 7: BDI-LangGraph Bridge + Benchmark Upgrades
+- **`bdi_bridge.py`** — `make_bdi_perceive_node`, `make_bdi_revise_node`, `make_bdi_plan_node`, `build_bdi_teleological_graph()`
+- BDI belief updating, desire reconsideration, intention reuse as LangGraph nodes
+- **Distribution Shift** — `shift_mode` (sudden/gradual), `transition_steps`, `shift_type` params
+- **Conflicting Objectives** — `tradeoff_step`, `tradeoff_multiplier`, added InnovationYield metric
+- **Negotiation** — `strategy` param (consensus/voting/auction), added GoalPersistence + Adaptivity metrics
+- **Knowledge Synthesis** — `critic_interval` param, added Empowerment metric
+
+#### New Files (8)
+- `src/.../measurement/metrics/empowerment.py`
+- `src/.../services/llm_negotiation.py`
+- `src/.../services/evolving_constraints.py`
+- `src/.../services/goal_grounding.py`
+- `src/.../services/audit_trail.py`
+- `src/.../infrastructure/knowledge_store.py`
+- `src/.../graph/bdi_bridge.py`
+- 5 new test files
+
+#### Stats
+- **617 tests** (498 → 617, +119 new), all passing
+- All 15 paper gaps closed
+- Lint clean on all new files
+
+---
+
 ## [1.0.0] — 2026-02-10
 
 ### Major: LLM-First Probabilistic Architecture

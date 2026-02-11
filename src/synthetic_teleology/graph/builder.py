@@ -102,6 +102,12 @@ class GraphBuilder:
         self._act_fn: Callable | None = None
         self._transition_fn: Callable | None = None
         self._metadata: dict[str, Any] = {}
+        self._knowledge_store: Any | None = None
+        self._audit_trail: Any | None = None
+        self._grounding_manager: Any | None = None
+        self._human_approval_before: list[str] = []
+        self._human_approval_after: list[str] = []
+        self._bdi_agent: Any | None = None
 
     # -- NEW: LLM-first API --------------------------------------------------
 
@@ -251,6 +257,46 @@ class GraphBuilder:
             self._transition_fn = transition_fn
         return self
 
+    def with_knowledge_store(self, store: Any) -> GraphBuilder:
+        """Attach a KnowledgeStore for metacognitive commons."""
+        self._knowledge_store = store
+        return self
+
+    def with_audit_trail(self, trail: Any) -> GraphBuilder:
+        """Attach a GoalAuditTrail for revision tracking."""
+        self._audit_trail = trail
+        return self
+
+    def with_grounding_manager(self, manager: Any) -> GraphBuilder:
+        """Attach an IntentionalGroundingManager."""
+        self._grounding_manager = manager
+        return self
+
+    def with_human_approval(
+        self,
+        before: list[str] | None = None,
+        after: list[str] | None = None,
+    ) -> GraphBuilder:
+        """Set human-in-the-loop interrupt points.
+
+        Parameters
+        ----------
+        before:
+            Node names to interrupt *before* execution.
+        after:
+            Node names to interrupt *after* execution.
+        """
+        if before:
+            self._human_approval_before = before
+        if after:
+            self._human_approval_after = after
+        return self
+
+    def with_bdi_agent(self, bdi_agent: Any) -> GraphBuilder:
+        """Attach a BDI agent for BDI-LangGraph bridge."""
+        self._bdi_agent = bdi_agent
+        return self
+
     def with_metadata(self, **kwargs: Any) -> GraphBuilder:
         """Set additional metadata."""
         self._metadata.update(kwargs)
@@ -340,7 +386,12 @@ class GraphBuilder:
 
             perceive_fn = _default_llm_perceive
 
-        app = build_teleological_graph(checkpointer=self._checkpointer)
+        app = build_teleological_graph(
+            checkpointer=self._checkpointer,
+            interrupt_before=self._human_approval_before or None,
+            interrupt_after=self._human_approval_after or None,
+            enable_grounding=self._grounding_manager is not None,
+        )
 
         initial_state: dict[str, Any] = {
             "step": 0,
@@ -365,6 +416,13 @@ class GraphBuilder:
             "reasoning_trace": [],
             "metadata": self._metadata,
         }
+
+        if self._knowledge_store is not None:
+            initial_state["knowledge_store"] = self._knowledge_store
+        if self._audit_trail is not None:
+            initial_state["audit_trail"] = self._audit_trail
+        if self._grounding_manager is not None:
+            initial_state["grounding_manager"] = self._grounding_manager
 
         return app, initial_state
 
@@ -393,7 +451,12 @@ class GraphBuilder:
         pipeline = ConstraintPipeline(checkers=self._constraint_checkers)
         policy_filter = PolicyFilter(pipeline)
 
-        app = build_teleological_graph(checkpointer=self._checkpointer)
+        app = build_teleological_graph(
+            checkpointer=self._checkpointer,
+            interrupt_before=self._human_approval_before or None,
+            interrupt_after=self._human_approval_after or None,
+            enable_grounding=self._grounding_manager is not None,
+        )
 
         initial_state: dict[str, Any] = {
             "step": 0,
@@ -415,6 +478,13 @@ class GraphBuilder:
             "reasoning_trace": [],
             "metadata": self._metadata,
         }
+
+        if self._knowledge_store is not None:
+            initial_state["knowledge_store"] = self._knowledge_store
+        if self._audit_trail is not None:
+            initial_state["audit_trail"] = self._audit_trail
+        if self._grounding_manager is not None:
+            initial_state["grounding_manager"] = self._grounding_manager
 
         return app, initial_state
 

@@ -485,6 +485,119 @@ class UncertaintyAwareUpdater(BaseGoalUpdater):
 
 
 # ===================================================================== #
+#  Active Inference Updater                                              #
+# ===================================================================== #
+
+
+class ActiveInferenceUpdater(BaseGoalUpdater):
+    """Active inference goal updater per Haidemariam (2026) Section 5.4.3.
+
+    Decomposes expected free energy into pragmatic (goal-alignment) and
+    epistemic (uncertainty-reduction) components.  Triggers revision when
+    free energy exceeds a threshold AND prediction error is high.
+
+    Parameters
+    ----------
+    free_energy_threshold:
+        Minimum expected free energy to trigger revision. Default 0.5.
+    prediction_error_threshold:
+        Minimum prediction error to trigger revision. Default 0.3.
+    pragmatic_weight:
+        Weight for pragmatic (goal-seeking) component. Default 0.6.
+    epistemic_weight:
+        Weight for epistemic (exploration) component. Default 0.4.
+    learning_rate:
+        Step size for goal adjustment. Default 0.1.
+    sigma:
+        Variance parameter for pragmatic value. Default 1.0.
+    """
+
+    def __init__(
+        self,
+        free_energy_threshold: float = 0.5,
+        prediction_error_threshold: float = 0.3,
+        pragmatic_weight: float = 0.6,
+        epistemic_weight: float = 0.4,
+        learning_rate: float = 0.1,
+        sigma: float = 1.0,
+    ) -> None:
+        self._fe_threshold = free_energy_threshold
+        self._pe_threshold = prediction_error_threshold
+        self._pragmatic_w = pragmatic_weight
+        self._epistemic_w = epistemic_weight
+        self._learning_rate = learning_rate
+        self._sigma = sigma
+        self._prev_score: float | None = None
+
+    def update(
+        self,
+        goal: Goal,
+        state: StateSnapshot,
+        eval_signal: EvalSignal,
+        constraints: ConstraintSet | None = None,
+    ) -> Goal | None:
+        if goal.objective is None:
+            return None
+        if goal.objective.dimension != state.dimension:
+            return None
+
+        # Compute prediction error from consecutive evaluations
+        prediction_error = 0.0
+        if self._prev_score is not None:
+            prediction_error = abs(eval_signal.score - self._prev_score)
+        self._prev_score = eval_signal.score
+
+        # Pragmatic value: -(predicted_s - goal)^2 / (2*sigma^2)
+        goal_arr = np.array(goal.objective.values, dtype=np.float64)
+        state_arr = np.array(state.values, dtype=np.float64)
+        pragmatic = -float(np.sum((state_arr - goal_arr) ** 2) / (2 * self._sigma ** 2))
+
+        # Epistemic value: -(1 - confidence) * log(1 - confidence + eps)
+        eps = 1e-8
+        uncertainty = 1.0 - eval_signal.confidence
+        epistemic = -(uncertainty * np.log(uncertainty + eps))
+
+        # Expected free energy
+        free_energy = self._pragmatic_w * (-pragmatic) + self._epistemic_w * float(epistemic)
+
+        # Check thresholds
+        if free_energy < self._fe_threshold or prediction_error < self._pe_threshold:
+            return None
+
+        # Blend revision: pragmatic (toward state) + epistemic (toward high-variance region)
+        # Pragmatic component: move toward state
+        pragmatic_direction = state_arr - goal_arr
+
+        # Epistemic component: amplify dimensions with largest error
+        if eval_signal.dimension_scores:
+            dim_errors = np.array(
+                [1.0 - abs(s) for s in eval_signal.dimension_scores], dtype=np.float64
+            )
+        else:
+            dim_errors = np.ones_like(goal_arr)
+        epistemic_direction = dim_errors * np.sign(pragmatic_direction + eps)
+
+        # Combined direction
+        direction = (
+            self._pragmatic_w * pragmatic_direction
+            + self._epistemic_w * epistemic_direction
+        )
+
+        new_values = tuple(
+            float(g + self._learning_rate * d)
+            for g, d in zip(goal_arr, direction)
+        )
+        new_objective = goal.objective.with_values(new_values)
+
+        new_goal, _ = goal.revise(
+            new_objective=new_objective,
+            reason=RevisionReason.ACTIVE_INFERENCE.value,
+            eval_signal=eval_signal,
+        )
+        return new_goal
+
+
+# ===================================================================== #
 #  Constrained Updater                                                   #
 # ===================================================================== #
 

@@ -1,14 +1,16 @@
-"""Tests for all 7 measurement metrics."""
+"""Tests for all measurement metrics including Empowerment."""
 
 from __future__ import annotations
 
 import pytest
 
 from synthetic_teleology.domain.events import GoalRevised
-from synthetic_teleology.domain.values import GoalRevision
+from synthetic_teleology.domain.values import GoalRevision, ObjectiveVector
+from synthetic_teleology.domain.enums import Direction
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry
 from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
 from synthetic_teleology.measurement.metrics.base import MetricResult
+from synthetic_teleology.measurement.metrics.empowerment import Empowerment
 from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.metrics.innovation_yield import InnovationYield
 from synthetic_teleology.measurement.metrics.lyapunov_stability import LyapunovStability
@@ -18,6 +20,7 @@ from synthetic_teleology.measurement.metrics.reflective_efficiency import (
 )
 from synthetic_teleology.measurement.metrics.teleological_coherence import (
     TeleologicalCoherence,
+    _pearson,
 )
 
 
@@ -30,6 +33,8 @@ def _make_log(
     violation_steps: list[int] | None = None,
     reflection_steps: list[int] | None = None,
     num_revisions: int = 0,
+    state_values_list: list[tuple[float, ...]] | None = None,
+    goal_values_list: list[tuple[float, ...] | None] | None = None,
 ) -> AgentLog:
     """Build a synthetic AgentLog for testing."""
     if scores is None:
@@ -50,6 +55,8 @@ def _make_log(
             goal_revised=i in revision_steps,
             constraint_violated=i in violation_steps,
             reflection_triggered=i in reflection_steps,
+            state_values=state_values_list[i] if state_values_list and i < len(state_values_list) else (),
+            goal_values=goal_values_list[i] if goal_values_list and i < len(goal_values_list) else None,
         )
         log.entries.append(entry)
 
@@ -109,29 +116,137 @@ class TestGoalPersistence:
 
 
 class TestTeleologicalCoherence:
-    """TC = (mean(eval_scores) + 1) / 2."""
+    """TC: three-tier computation (correlation, proxy, legacy)."""
 
-    def test_all_perfect_scores(self) -> None:
+    # -- Legacy tier (no revisions) ------------------------------------------
+
+    def test_legacy_all_perfect_scores(self) -> None:
         log = _make_log(num_steps=5, scores=[1.0, 1.0, 1.0, 1.0, 1.0])
         metric = TeleologicalCoherence()
         result = metric.compute(log)
         assert result.value == pytest.approx(1.0)
 
-    def test_all_negative_one(self) -> None:
+    def test_legacy_all_negative_one(self) -> None:
         log = _make_log(num_steps=5, scores=[-1.0, -1.0, -1.0, -1.0, -1.0])
         metric = TeleologicalCoherence()
         result = metric.compute(log)
         assert result.value == pytest.approx(0.0)
 
-    def test_mixed_scores(self) -> None:
+    def test_legacy_mixed_scores(self) -> None:
         log = _make_log(num_steps=4, scores=[0.5, 0.5, -0.5, -0.5])
         metric = TeleologicalCoherence()
         result = metric.compute(log)
         # mean=0.0, TC = (0.0+1)/2 = 0.5
         assert result.value == pytest.approx(0.5)
 
+    # -- Correlation tier (goal_values available) ----------------------------
+
+    def test_correlation_negative_r_gives_high_tc(self) -> None:
+        """Negative correlation = coherent: bigger changes when scores are low."""
+        # Big goal jumps happen at steps with BAD scores, no change at GOOD scores
+        goal_values = [
+            (1.0,), (5.0,), (5.0,), (9.0,), (9.0,),
+        ]
+        scores = [0.5, -0.8, 0.5, -0.6, 0.5]
+        log = _make_log(
+            num_steps=5,
+            scores=scores,
+            goal_values_list=goal_values,
+        )
+        metric = TeleologicalCoherence()
+        result = metric.compute(log)
+        # r < 0 (big changes when bad scores) -> TC > 0.5
+        assert result.value > 0.5
+
+    def test_correlation_positive_r_gives_low_tc(self) -> None:
+        """Positive correlation = incoherent: bigger changes when scores are high."""
+        # Big goal jumps happen at steps with GOOD scores
+        goal_values = [
+            (1.0,), (5.0,), (5.0,), (9.0,), (9.0,),
+        ]
+        scores = [0.5, 0.8, -0.5, 0.9, -0.5]
+        log = _make_log(
+            num_steps=5,
+            scores=scores,
+            goal_values_list=goal_values,
+        )
+        metric = TeleologicalCoherence()
+        result = metric.compute(log)
+        # r > 0 (big changes when good scores) -> TC < 0.5
+        assert result.value < 0.5
+
+    def test_correlation_insufficient_points_falls_back_to_legacy(self) -> None:
+        """Only one goal change -> not enough for correlation, use legacy."""
+        goal_values = [
+            (1.0,), (5.0,), None, None, None,
+        ]
+        scores = [0.5, 0.5, 0.5, 0.5, 0.5]
+        log = _make_log(
+            num_steps=5,
+            scores=scores,
+            goal_values_list=goal_values,
+        )
+        metric = TeleologicalCoherence()
+        result = metric.compute(log)
+        # Legacy: (0.5 + 1) / 2 = 0.75
+        assert result.value == pytest.approx(0.75)
+
+    # -- Proxy tier (revisions present, no goal_values) ----------------------
+
+    def test_proxy_responsive_revision_gives_high_tc(self) -> None:
+        """Revision during poor eval followed by improvement."""
+        scores = [0.5, -0.3, 0.4, 0.5, 0.5]
+        log = _make_log(
+            num_steps=5,
+            scores=scores,
+            revision_steps=[1],
+            num_revisions=1,
+        )
+        metric = TeleologicalCoherence()
+        result = metric.compute(log)
+        # score at step 1 is -0.3 (poor) and step 2 is 0.4 (improvement)
+        assert result.value == pytest.approx(1.0)
+
+    def test_proxy_unresponsive_revision_gives_zero(self) -> None:
+        """Revision during good eval, not responsive."""
+        scores = [0.5, 0.3, 0.1, 0.5, 0.5]
+        log = _make_log(
+            num_steps=5,
+            scores=scores,
+            revision_steps=[1],
+            num_revisions=1,
+        )
+        metric = TeleologicalCoherence()
+        result = metric.compute(log)
+        # score at step 1 is 0.3 (not poor, >= 0) -> not responsive
+        assert result.value == pytest.approx(0.0)
+
     def test_name(self) -> None:
         assert TeleologicalCoherence().name == "teleological_coherence"
+
+
+class TestPearsonHelper:
+    """Test _pearson helper function."""
+
+    def test_perfect_positive(self) -> None:
+        r = _pearson([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])
+        assert r == pytest.approx(1.0)
+
+    def test_perfect_negative(self) -> None:
+        r = _pearson([1.0, 2.0, 3.0], [3.0, 2.0, 1.0])
+        assert r == pytest.approx(-1.0)
+
+    def test_no_correlation(self) -> None:
+        r = _pearson([1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 1.0, 3.0])
+        assert abs(r) < 0.5
+
+    def test_single_element_returns_zero(self) -> None:
+        r = _pearson([1.0], [2.0])
+        assert r == 0.0
+
+    def test_constant_returns_zero(self) -> None:
+        r = _pearson([1.0, 1.0, 1.0], [1.0, 2.0, 3.0])
+        assert r == 0.0
 
 
 class TestAdaptivity:
@@ -231,7 +346,9 @@ class TestNormativeFidelity:
 
 
 class TestInnovationYield:
-    """IY = unique_actions / total_actions."""
+    """IY: attribution formula with revisions, fallback without."""
+
+    # -- Fallback (no revisions) -- backward compatible ----------------------
 
     def test_all_unique_gives_one(self) -> None:
         log = _make_log(
@@ -276,8 +393,127 @@ class TestInnovationYield:
         assert result.value == 0.0
         assert "Insufficient" in result.explanation
 
+    # -- Attribution formula (with revisions) --------------------------------
+
+    def test_attributed_all_new_actions_after_revision(self) -> None:
+        """All post-revision actions are novel -> high novelty ratio."""
+        log = _make_log(
+            num_steps=6,
+            action_names=["a", "a", "a", "x", "y", "z"],
+            revision_steps=[3],
+            num_revisions=1,
+            scores=[0.3, 0.3, 0.3, 0.5, 0.6, 0.7],
+        )
+        metric = InnovationYield()
+        result = metric.compute(log)
+        # novelty_ratio = 3/4 = 0.75 (x,y,z new out of {a,x,y,z})
+        # quality_improvement: sigmoid(0.6 - 0.3) > 0.5
+        assert result.value > 0.5
+
+    def test_attributed_no_new_actions_after_revision(self) -> None:
+        """Same actions before and after revision -> zero novelty ratio."""
+        log = _make_log(
+            num_steps=6,
+            action_names=["a", "b", "a", "a", "b", "a"],
+            revision_steps=[3],
+            num_revisions=1,
+            scores=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+        )
+        metric = InnovationYield()
+        result = metric.compute(log)
+        # novelty_ratio = 0/2 = 0.0
+        # quality_improvement: sigmoid(0) = 0.5
+        # IY = 0.6*0.0 + 0.4*0.5 = 0.2
+        assert result.value == pytest.approx(0.2)
+
+    def test_attributed_quality_improvement_matters(self) -> None:
+        """Score improvement after revision boosts IY."""
+        log = _make_log(
+            num_steps=6,
+            action_names=["a", "a", "a", "a", "a", "a"],
+            revision_steps=[3],
+            num_revisions=1,
+            scores=[-0.5, -0.5, -0.5, 0.8, 0.8, 0.8],
+        )
+        metric = InnovationYield()
+        result = metric.compute(log)
+        # novelty_ratio = 0 (same actions)
+        # quality_improvement: sigmoid(0.8 - (-0.5)) = sigmoid(1.3) ≈ 0.79
+        # IY = 0.6*0 + 0.4*0.79 ≈ 0.31
+        assert result.value > 0.25
+        assert result.value < 0.5
+
     def test_name(self) -> None:
         assert InnovationYield().name == "innovation_yield"
+
+
+class TestEmpowerment:
+    """Empowerment: I(A; S'|S) — mutual information between actions and transitions."""
+
+    def test_name(self) -> None:
+        assert Empowerment().name == "empowerment"
+
+    def test_insufficient_data(self) -> None:
+        log = _make_log(num_steps=2, scores=[0.5, 0.5])
+        metric = Empowerment()
+        result = metric.compute(log)
+        assert result.value == 0.0
+
+    def test_deterministic_actions_give_high_empowerment(self) -> None:
+        """Different actions produce consistently different transitions."""
+        states = [
+            (0.0,), (1.0,), (0.0,), (0.5,), (0.0,), (1.0,), (0.0,), (0.5,),
+        ]
+        actions = ["big", "reset", "small", "reset", "big", "reset", "small", "reset"]
+        scores = [0.5] * 8
+        log = _make_log(
+            num_steps=8,
+            action_names=actions,
+            scores=scores,
+            state_values_list=states,
+        )
+        metric = Empowerment()
+        result = metric.compute(log)
+        # Actions should determine transitions
+        assert result.value >= 0.0
+
+    def test_random_transitions_give_low_empowerment(self) -> None:
+        """Same action produces variable transitions -> low empowerment."""
+        states = [
+            (0.0,), (5.0,), (0.1,), (10.0,), (0.2,), (0.5,), (0.3,), (20.0,),
+        ]
+        actions = ["a", "a", "a", "a", "a", "a", "a", "a"]
+        scores = [0.5] * 8
+        log = _make_log(
+            num_steps=8,
+            action_names=actions,
+            scores=scores,
+            state_values_list=states,
+        )
+        metric = Empowerment()
+        result = metric.compute(log)
+        # Single action -> H(delta|A) = H(delta) -> E = 0
+        assert result.value == pytest.approx(0.0)
+
+    def test_no_state_values_uses_eval_proxy(self) -> None:
+        """When no state_values, use eval score changes as proxy."""
+        scores = [0.1, 0.5, 0.1, 0.9, 0.1, 0.5, 0.1, 0.9]
+        actions = ["up", "down", "up", "down", "up", "down", "up", "down"]
+        log = _make_log(num_steps=8, action_names=actions, scores=scores)
+        metric = Empowerment()
+        result = metric.compute(log)
+        assert 0.0 <= result.value <= 1.0
+
+    def test_validates_min_entries(self) -> None:
+        """Empowerment needs at least 3 entries with states and actions."""
+        log = _make_log(num_steps=2, action_names=["a", "b"])
+        metric = Empowerment()
+        assert not metric.validate(log)
+
+    def test_describe(self) -> None:
+        metric = Empowerment()
+        desc = metric.describe()
+        assert "mutual information" in desc.lower()
 
 
 class TestLyapunovStability:

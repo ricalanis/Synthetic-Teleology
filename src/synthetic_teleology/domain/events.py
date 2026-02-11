@@ -226,3 +226,17 @@ class PerturbationInjected(DomainEvent):
     magnitude: float = 0.0
     affected_dimensions: tuple[int, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class KnowledgeUpdated(DomainEvent):
+    """A knowledge entry was added or updated in the metacognitive commons."""
+
+    key: str = ""
+    source: str = ""
+    tags: tuple[str, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)

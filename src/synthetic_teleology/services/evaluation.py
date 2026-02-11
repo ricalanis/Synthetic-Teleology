@@ -418,6 +418,186 @@ class ReflectiveEvaluator(BaseEvaluator):
 
 
 # ===================================================================== #
+#  Self-Modeling Evaluator (Decorator)                                    #
+# ===================================================================== #
+
+
+class SelfModelingEvaluator(BaseEvaluator):
+    """Decorator wrapping any evaluator with a self-model predictor.
+
+    Implements Haidemariam (2026) pattern (b): maintains a linear regression
+    self-model over a sliding window of (step, score) pairs.  Tracks
+    prediction error (surprise) and reduces confidence when the self-model
+    is consistently wrong, indicating the evaluation landscape has changed.
+
+    Parameters
+    ----------
+    inner:
+        The wrapped evaluator.
+    window_size:
+        Number of past evaluations for the regression model. Default 20.
+    surprise_threshold:
+        EMA surprise above which confidence is reduced. Default 0.2.
+    ema_alpha:
+        Smoothing factor for cumulative surprise EMA. Default 0.3.
+    r_squared_gate:
+        Minimum R-squared for trusting the self-model. Default 0.3.
+    """
+
+    def __init__(
+        self,
+        inner: BaseEvaluator,
+        window_size: int = 20,
+        surprise_threshold: float = 0.2,
+        ema_alpha: float = 0.3,
+        r_squared_gate: float = 0.3,
+    ) -> None:
+        self._inner = inner
+        self._window_size = window_size
+        self._surprise_threshold = surprise_threshold
+        self._ema_alpha = ema_alpha
+        self._r_squared_gate = r_squared_gate
+
+        self._history: deque[tuple[int, float]] = deque(maxlen=window_size)
+        self._step_counter: int = 0
+        self._surprise_ema: float = 0.0
+        self._last_prediction: float | None = None
+        self._last_r_squared: float = 0.0
+
+    @property
+    def inner(self) -> BaseEvaluator:
+        return self._inner
+
+    @property
+    def recommends_goal_edit(self) -> bool:
+        """True when persistent surprise suggests the goal should be revised."""
+        return (
+            self._surprise_ema > self._surprise_threshold
+            and self._last_r_squared >= self._r_squared_gate
+            and len(self._history) >= 5
+        )
+
+    @property
+    def surprise_ema(self) -> float:
+        return self._surprise_ema
+
+    @property
+    def last_r_squared(self) -> float:
+        return self._last_r_squared
+
+    def validate(self, goal: Goal, state: StateSnapshot) -> bool:
+        return self._inner.validate(goal, state)
+
+    def evaluate(self, goal: Goal, state: StateSnapshot) -> EvalSignal:
+        raw_signal = self._inner.evaluate(goal, state)
+
+        self._step_counter += 1
+        actual_score = raw_signal.score
+
+        # Make prediction from self-model (before updating)
+        prediction = self._predict()
+        self._last_prediction = prediction
+
+        # Compute surprise
+        if prediction is not None:
+            surprise = abs(prediction - actual_score)
+            self._surprise_ema = (
+                self._ema_alpha * surprise
+                + (1 - self._ema_alpha) * self._surprise_ema
+            )
+        else:
+            surprise = 0.0
+
+        # Update history
+        self._history.append((self._step_counter, actual_score))
+
+        # Fit self-model and compute R-squared
+        self._last_r_squared = self._compute_r_squared()
+
+        # Adjust confidence based on persistent surprise
+        adjusted_confidence = raw_signal.confidence
+        if (
+            self._surprise_ema > self._surprise_threshold
+            and self._last_r_squared >= self._r_squared_gate
+        ):
+            reduction = min(0.4, (self._surprise_ema - self._surprise_threshold) * 2)
+            adjusted_confidence = max(0.05, raw_signal.confidence - reduction)
+
+        return EvalSignal(
+            score=raw_signal.score,
+            dimension_scores=raw_signal.dimension_scores,
+            confidence=max(0.0, min(1.0, adjusted_confidence)),
+            explanation=(
+                f"SelfModelingEvaluator: {raw_signal.explanation} | "
+                f"prediction={prediction:.4f}" if prediction is not None else
+                f"SelfModelingEvaluator: {raw_signal.explanation} | no prediction yet"
+            ),
+            reasoning=raw_signal.reasoning,
+            criteria_scores=raw_signal.criteria_scores,
+            metadata={
+                **dict(raw_signal.metadata),
+                "self_model_prediction": prediction,
+                "self_model_surprise": surprise,
+                "self_model_r_squared": self._last_r_squared,
+            },
+        )
+
+    def _predict(self) -> float | None:
+        """Predict the next score using linear regression."""
+        if len(self._history) < 3:
+            return None
+
+        steps = [s for s, _ in self._history]
+        scores = [sc for _, sc in self._history]
+
+        n = len(steps)
+        sx = sum(steps)
+        sy = sum(scores)
+        sxy = sum(x * y for x, y in zip(steps, scores))
+        sx2 = sum(x * x for x in steps)
+
+        denom = n * sx2 - sx * sx
+        if abs(denom) < 1e-12:
+            return sum(scores) / n
+
+        slope = (n * sxy - sx * sy) / denom
+        intercept = (sy - slope * sx) / n
+
+        next_step = self._step_counter + 1
+        return slope * next_step + intercept
+
+    def _compute_r_squared(self) -> float:
+        """Compute R-squared of the linear model."""
+        if len(self._history) < 3:
+            return 0.0
+
+        steps = [s for s, _ in self._history]
+        scores = [sc for _, sc in self._history]
+
+        n = len(steps)
+        sx = sum(steps)
+        sy = sum(scores)
+        sxy = sum(x * y for x, y in zip(steps, scores))
+        sx2 = sum(x * x for x in steps)
+
+        denom = n * sx2 - sx * sx
+        if abs(denom) < 1e-12:
+            return 0.0
+
+        slope = (n * sxy - sx * sy) / denom
+        intercept = (sy - slope * sx) / n
+
+        mean_y = sy / n
+        ss_tot = sum((y - mean_y) ** 2 for y in scores)
+        ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(steps, scores))
+
+        if ss_tot < 1e-12:
+            return 1.0  # perfect fit on constant data
+
+        return max(0.0, 1.0 - ss_res / ss_tot)
+
+
+# ===================================================================== #
 #  LLM Critic Evaluator                                                  #
 # ===================================================================== #
 

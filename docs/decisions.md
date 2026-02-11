@@ -1,5 +1,44 @@
 # Architecture Decisions
 
+## 2026-02-11: Full Paper Alignment (v1.1.0)
+
+### Decision: Three-Tier TC Metric Computation
+- **Context:** TC was using normalized mean of eval scores, not the correlation formula from the paper.
+- **Choice:** Three tiers: (1) Pearson correlation between goal-change magnitudes and eval scores (when `goal_values` available), (2) responsive-revision proxy (when revisions present), (3) legacy mean-score fallback.
+- **Rationale:** Primary tier directly implements the paper's formula. Proxy and legacy tiers ensure backward compatibility when data is sparse.
+
+### Decision: Decorator Pattern for SelfModelingEvaluator
+- **Context:** Paper pattern (b) requires a self-model that predicts evaluation scores and detects surprise.
+- **Choice:** `SelfModelingEvaluator` wraps any `BaseEvaluator` (Decorator pattern), adding linear regression prediction, surprise EMA, and confidence adjustment.
+- **Rationale:** Any evaluator gains self-modeling by wrapping — no inheritance changes needed. R-squared gate prevents unreliable models from triggering revisions.
+
+### Decision: Active Inference via Expected Free Energy
+- **Context:** Paper Section 5.4.3 calls for active inference in goal revision.
+- **Choice:** `ActiveInferenceUpdater` decomposes free energy into pragmatic (goal-state distance) and epistemic (confidence-based) components, revising when both exceed thresholds.
+- **Rationale:** Dual threshold prevents spurious revisions. Blend of pragmatic and epistemic components balances exploitation and exploration.
+
+### Decision: LLM Negotiation as 3-Phase Protocol
+- **Context:** Multi-agent negotiation was limited to numeric averaging.
+- **Choice:** `LLMNegotiator` implements Propose → Critique → Synthesize protocol operating on `agent_results` dicts.
+- **Rationale:** Operating on result dicts (not BaseAgent objects) bridges graph and service layers cleanly. The 3-phase structure mirrors dialogue-based negotiation theory.
+
+### Decision: Parallel Multi-Agent via LangGraph Send API
+- **Context:** Sequential agent execution limits throughput in multi-agent scenarios.
+- **Choice:** `parallel=True` uses LangGraph `Send` API for fan-out/fan-in with custom `_merge_agent_results` reducer.
+- **Rationale:** LangGraph's native Send API handles parallelism correctly, including state merging. Sequential mode remains default for backward compatibility.
+
+### Decision: BDI Bridge via Node Factories
+- **Context:** BDI agent exists but is disconnected from LangGraph.
+- **Choice:** Factory functions (`make_bdi_*_node`) wrap BDI agent methods as LangGraph nodes. `build_bdi_teleological_graph()` compiles a full graph with BDI-augmented nodes.
+- **Rationale:** Factory functions keep the bridge lightweight and composable. BDI methods augment (not replace) standard nodes — falling back to standard behavior when BDI doesn't trigger.
+
+### Decision: Rule-Based Grounding Fallback
+- **Context:** Intentional grounding needs LLM for assessment, but should work without one.
+- **Choice:** `IntentionalGroundingManager` supports both LLM-based and rule-based grounding. Rule-based fallback triggers when high-priority directives exceed threshold.
+- **Rationale:** Enables grounding in numeric-mode agents without an LLM. LLM mode provides richer assessment when available.
+
+---
+
 ## 2026-02-10: LLM-First Probabilistic Rewrite (v1.0.0)
 
 ### Decision: Transform Every Node from Numeric Computation to LLM-Driven Reasoning

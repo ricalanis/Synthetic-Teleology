@@ -39,8 +39,10 @@ from synthetic_teleology.services.evaluation import (
     LLMCriticEvaluator,
     NumericEvaluator,
     ReflectiveEvaluator,
+    SelfModelingEvaluator,
 )
 from synthetic_teleology.services.goal_revision import (
+    ActiveInferenceUpdater,
     BaseGoalUpdater,
     ConstrainedUpdater,
     GoalUpdaterChain,
@@ -50,7 +52,19 @@ from synthetic_teleology.services.goal_revision import (
     ThresholdUpdater,
     UncertaintyAwareUpdater,
 )
+from synthetic_teleology.services.evolving_constraints import EvolvingConstraintManager
+from synthetic_teleology.services.goal_grounding import (
+    ExternalDirective,
+    GoalSource,
+    IntentionalGroundingManager,
+)
 from synthetic_teleology.services.llm_constraints import LLMConstraintChecker
+from synthetic_teleology.services.llm_negotiation import (
+    GoalProposal,
+    LLMNegotiator,
+    NegotiationConsensus,
+    NegotiationCritique,
+)
 from synthetic_teleology.services.llm_evaluation import LLMEvaluator
 from synthetic_teleology.services.llm_planning import LLMPlanner as LLMHypothesisPlanner
 from synthetic_teleology.services.llm_revision import LLMReviser
@@ -74,8 +88,10 @@ __all__ = [
     "NumericEvaluator",
     "CompositeEvaluator",
     "ReflectiveEvaluator",
+    "SelfModelingEvaluator",
     "LLMCriticEvaluator",
     # goal revision
+    "ActiveInferenceUpdater",
     "BaseGoalUpdater",
     "ThresholdUpdater",
     "GradientUpdater",
@@ -113,4 +129,14 @@ __all__ = [
     "LLMHypothesisPlanner",
     "LLMReviser",
     "LLMConstraintChecker",
+    # LLM negotiation (v1.0)
+    "LLMNegotiator",
+    "GoalProposal",
+    "NegotiationConsensus",
+    "NegotiationCritique",
+    # Evolving constraints + grounding (v1.0)
+    "EvolvingConstraintManager",
+    "IntentionalGroundingManager",
+    "ExternalDirective",
+    "GoalSource",
 ]

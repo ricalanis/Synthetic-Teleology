@@ -90,5 +90,10 @@ class TeleologicalState(TypedDict, total=False):
     action_history: Annotated[list, operator.add]
     reasoning_trace: Annotated[list, operator.add]  # NEW: all LLM reasoning
 
+    # -- Optional integrations ------------------------------------------------
+    knowledge_store: Any                             # KnowledgeStore instance
+    audit_trail: Any                                 # GoalAuditTrail instance
+    grounding_manager: Any                           # IntentionalGroundingManager instance
+
     # -- Extensibility -------------------------------------------------------
     metadata: dict[str, Any]

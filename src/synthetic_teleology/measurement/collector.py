@@ -47,6 +47,7 @@ class AgentLogEntry:
     action_name: str = ""
     action_cost: float = 0.0
     state_values: tuple[float, ...] = ()
+    goal_values: tuple[float, ...] | None = None
     goal_revised: bool = False
     constraint_violated: bool = False
     reflection_triggered: bool = False
@@ -92,6 +93,10 @@ class AgentLog:
     def get_action_names(self) -> list[str]:
         """Return the action names for every step."""
         return [e.action_name for e in self.entries]
+
+    def get_goal_value_series(self) -> list[tuple[float, ...] | None]:
+        """Return the goal_values for every step (None when not captured)."""
+        return [e.goal_values for e in self.entries]
 
     def steps_where(self, predicate: str) -> list[int]:
         """Return step indices where the named boolean flag is ``True``.
@@ -209,6 +214,10 @@ class EventCollector:
 
         entry = self._ensure_pending(agent_id)
         entry.goal_revised = True
+
+        # Capture new goal values if available
+        if event.new_objective is not None:
+            entry.goal_values = event.new_objective.values
 
     def _on_action(self, event: DomainEvent) -> None:
         """Capture action name and cost."""

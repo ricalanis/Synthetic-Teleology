@@ -66,6 +66,19 @@ class RevisionReason(Enum):
     LLM_CRITIQUE = "llm_critique"
     EVALUATION_FEEDBACK = "evaluation_feedback"
     EXTERNAL_DIRECTIVE = "external_directive"
+    ACTIVE_INFERENCE = "active_inference"
+    DIALOGUE = "dialogue"
+
+
+class GoalOrigin(Enum):
+    """Origin of a goal — provenance tracking per Haidemariam (2026)."""
+
+    DESIGN = "design"
+    USER = "user"
+    NORMATIVE = "normative"
+    ENDOGENOUS = "endogenous"
+    NEGOTIATED = "negotiated"
+    PROPAGATED = "propagated"
 
 
 class NegotiationStrategy(Enum):

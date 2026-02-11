@@ -72,7 +72,15 @@ class DistributionShiftBenchmark(BaseBenchmark):
         noise_std: float = 0.05,
         post_shift_noise_std: float | None = None,
         step_size: float = 0.5,
+        shift_mode: str = "sudden",
+        transition_steps: int = 5,
+        shift_type: str = "state",
     ) -> None:
+        if shift_mode not in ("sudden", "gradual"):
+            raise ValueError(f"shift_mode must be 'sudden' or 'gradual', got {shift_mode!r}")
+        if shift_type not in ("state", "dynamics", "both"):
+            raise ValueError(f"shift_type must be 'state', 'dynamics', or 'both', got {shift_type!r}")
+
         self._dimensions = dimensions
         self._steps_per_phase = steps_per_phase
         self._target_values = target_values or tuple(5.0 for _ in range(dimensions))
@@ -84,6 +92,9 @@ class DistributionShiftBenchmark(BaseBenchmark):
             else noise_std * 3.0
         )
         self._step_size = step_size
+        self._shift_mode = shift_mode
+        self._transition_steps = transition_steps
+        self._shift_type = shift_type
 
         # Initialized in setup()
         self._event_bus: EventBus | None = None

@@ -27,6 +27,8 @@ from synthetic_teleology.infrastructure.event_bus import EventBus
 from synthetic_teleology.measurement.benchmarks.base import BaseBenchmark
 from synthetic_teleology.measurement.collector import AgentLog, AgentLogEntry, EventCollector
 from synthetic_teleology.measurement.engine import MetricsEngine
+from synthetic_teleology.measurement.metrics.adaptivity import Adaptivity
+from synthetic_teleology.measurement.metrics.goal_persistence import GoalPersistence
 from synthetic_teleology.measurement.report import MetricsReport
 
 logger = logging.getLogger(__name__)
@@ -222,9 +224,12 @@ class NegotiationBenchmark(BaseBenchmark):
         max_negotiation_rounds: int = 50,
         momentum: float = 0.3,
         objective_spread: float = 5.0,
+        strategy: str = "consensus",
     ) -> None:
         if num_agents < 2:
             raise ValueError(f"num_agents must be >= 2, got {num_agents}")
+        if strategy not in ("consensus", "voting", "auction"):
+            raise ValueError(f"strategy must be 'consensus', 'voting', or 'auction', got {strategy!r}")
 
         self._num_agents = num_agents
         self._dimensions = dimensions
@@ -233,11 +238,17 @@ class NegotiationBenchmark(BaseBenchmark):
         self._max_negotiation_rounds = max_negotiation_rounds
         self._momentum = momentum
         self._objective_spread = objective_spread
+        self._strategy = strategy
         self._engine: MetricsEngine | None = None
 
     def setup(self) -> None:
-        """Create metrics engine with all default metrics."""
-        self._engine = MetricsEngine()
+        """Create metrics engine with GP, AD, and default metrics."""
+        self._engine = MetricsEngine(
+            metrics=[
+                GoalPersistence(),
+                Adaptivity(),
+            ]
+        )
 
     def run_scenario(self, seed: int) -> AgentLog:
         """Run a negotiation scenario.

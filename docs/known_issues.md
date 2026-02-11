@@ -49,6 +49,20 @@
 - **Workaround:** For examples requiring checkpointing, avoid storing custom objects in state. The `04_human_in_the_loop.py` example uses a simulated approval callback pattern instead of LangGraph `interrupt()`/`Command(resume=...)`.
 - **How to avoid:** If full checkpointing is needed, strategies would need to be stored outside the state (e.g., via closures in node functions, or a global registry). This is a fundamental tension between LangGraph's serialization model and the dependency-injection approach. A future version could use a serializable strategy identifier + registry lookup pattern.
 
+## 2026-02-11: Goal.revise() returns tuple, not just Goal
+
+- **What happened:** `goal_grounding.py` initially called `return goal.revise(new_description=..., reason=...)` expecting a `Goal` object back.
+- **Root cause:** `Goal.revise()` returns `tuple[Goal, GoalRevision]` (the new goal plus a revision record). Code that assigns the result directly as a Goal gets a tuple instead.
+- **Fix:** Unpack the tuple: `new_goal, _revision = goal.revise(...)`. Set provenance on `new_goal` separately since `revise()` doesn't accept a `provenance` kwarg.
+- **How to avoid:** Always check the return type of `Goal.revise()` — it returns a 2-tuple. Any code calling `revise()` must unpack.
+
+## 2026-02-11: StateSnapshot requires timestamp argument
+
+- **What happened:** `StateSnapshot(values=(1.0,))` raised `TypeError: missing 1 required positional argument: 'timestamp'` in BDI bridge tests.
+- **Root cause:** `StateSnapshot` is a frozen dataclass with `timestamp: float` as a required field. Easy to forget when constructing test fixtures.
+- **Fix:** Added `timestamp=0.0` to all StateSnapshot constructor calls in tests.
+- **How to avoid:** When creating StateSnapshot in tests, always include `timestamp=0.0` (or appropriate value).
+
 ## 2026-02-10: LangGraph stream returns dict chunks, not tuples
 
 - **What happened:** `ValueError: not enough values to unpack (expected 2, got 1)` in `streaming.py`.

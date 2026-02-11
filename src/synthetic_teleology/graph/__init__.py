@@ -22,6 +22,12 @@ Edge functions:
     should_continue, should_revise
 """
 
+from synthetic_teleology.graph.bdi_bridge import (
+    build_bdi_teleological_graph,
+    make_bdi_perceive_node,
+    make_bdi_plan_node,
+    make_bdi_revise_node,
+)
 from synthetic_teleology.graph.builder import GraphBuilder
 from synthetic_teleology.graph.edges import should_continue, should_revise
 from synthetic_teleology.graph.graph import build_teleological_graph
@@ -72,6 +78,11 @@ __all__ = [
     "filter_policy_node",
     "act_node",
     "reflect_node",
+    # BDI Bridge
+    "build_bdi_teleological_graph",
+    "make_bdi_perceive_node",
+    "make_bdi_revise_node",
+    "make_bdi_plan_node",
     # Edges
     "should_continue",
     "should_revise",
