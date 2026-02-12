@@ -242,6 +242,11 @@
 - **Choice:** Split into `examples/conceptual/` (14 core demos) and `examples/production/` (self-contained mini-packages with custom strategies, domain models, and CLI entry points).
 - **Rationale:** Conceptual examples stay simple and focused on framework APIs. Production examples demonstrate the full Strategy pattern — custom evaluators, planners, and constraint checkers for real domains — without cluttering the learning path.
 
+### Normalized Production Example Conventions
+- **Context:** 5 production examples were written by parallel agents and had inconsistencies: `_get_model()` sometimes returned mock directly, `__init__.py` had no exports, KnowledgeStore/AuditTrail wiring was inconsistent, mode detection and verbose output varied, private attribute access in some `main.py` files.
+- **Choice:** Established canonical patterns that all production examples must follow: (1) `_get_model()` always returns `None` on no API key, caller does `_get_model() or _build_mock_model()`. (2) `__init__.py` exports the build function. (3) All single-agent examples wire both KnowledgeStore and GoalAuditTrail. (4) `main.py` shows LIVE vs SIMULATED mode banner. (5) `--verbose` shows step-by-step eval/action output. (6) Only use public APIs (`.entries`, `.keys()`, `.get()`), never `._entries`.
+- **Rationale:** Consistency across examples is critical for user learning — users study one example and expect the same patterns in others. Canonical patterns also make it easier to add new production examples in the future without reinventing conventions.
+
 ### Hybrid Mock Pattern for Production Examples
 - **Context:** Production examples need to run without API keys (CI, demos, learning) while also supporting real LLM mode. Fully mocking all 5 LLM services (evaluator, planner, reviser, constraints, negotiation) creates fragile mock response ordering that breaks when node execution order varies.
 - **Choice:** Custom evaluator (reads simulated environment state → deterministic scores) + LLM planner/reviser via `MockStructuredChatModel`. Simulated tools mutate shared domain state. Custom `BaseConstraintChecker` subclasses instead of `LLMConstraintChecker` (except multi-agent example). Real LLM replaces mock when API key present; custom evaluator and tools remain.

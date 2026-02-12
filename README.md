@@ -242,8 +242,13 @@ Full-featured agents with custom evaluators, planners, and constraint checkers:
 |-------|-------------|-----|
 | **Polymarket Trader** | Goal-directed prediction market trading. Aligns portfolio positions with conviction-based probability estimates using Kelly criterion sizing, risk limits, and capital constraints. | `PYTHONPATH=src python -m examples.production.polymarket_trader.main` |
 | **Sales SDR** | Goal-directed sales development. Manages lead qualification, selects outreach channels, and tracks conversion funnel metrics with contact frequency and daily limit constraints. | `PYTHONPATH=src python -m examples.production.sales_sdr.main` |
+| **Competitive Research** | Competitive intelligence analyst that builds comprehensive competitor profiles. Demonstrates goal revision when a strategic pivot is discovered mid-analysis. | `PYTHONPATH=src python -m examples.production.competitive_research.main` |
+| **Investment Thesis** | Investment analysis agent that builds evidence-driven theses. Demonstrates goal revision when material litigation risk is discovered mid-research. | `PYTHONPATH=src python -m examples.production.investment_thesis.main` |
+| **Data Pipeline Fixer** | Autonomous pipeline monitoring and repair agent. Demonstrates goal revision on schema drift, evolving constraints, and knowledge store integration. | `PYTHONPATH=src python -m examples.production.data_pipeline_fixer.main` |
+| **Learning Curriculum** | Adaptive curriculum optimization that responds to simulated learner performance. Demonstrates goal revision on quiz failure with prerequisite and time budget constraints. | `PYTHONPATH=src python -m examples.production.learning_curriculum.main` |
+| **Deployment Coordinator** | Multi-agent deployment orchestration (Release, Security, SRE) with LLM-powered negotiation. Demonstrates coordinated goal revision when a CVE is discovered mid-deployment. | `PYTHONPATH=src python -m examples.production.deployment_coordinator.main` |
 
-Both agents run in simulated mode by default. Pass `--live` to use real APIs (requires `POLYMARKET_API_KEY` or `HUBSPOT_API_KEY`).
+All agents run in simulated mode by default (no API key required). Set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` for real LLM mode. Polymarket Trader and Sales SDR also accept `--live` for their domain-specific APIs (`POLYMARKET_API_KEY` or `HUBSPOT_API_KEY`).
 
 ## Metrics
 

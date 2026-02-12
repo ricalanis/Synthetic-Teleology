@@ -1,5 +1,19 @@
 # Known Issues
 
+## 2026-02-11: Production examples used private `._entries` on AuditTrail and KnowledgeStore
+
+- **What happened:** `investment_thesis/main.py` accessed `audit_trail._entries` and `knowledge_store._entries` directly instead of using public APIs.
+- **Root cause:** Parallel agent writing the example didn't check the public API surface of `GoalAuditTrail` and `KnowledgeStore`.
+- **Fix:** Replaced with `audit_trail.entries` (property returning a list copy), `knowledge_store.keys()`, and `knowledge_store.get(key)`.
+- **How to avoid:** When using infrastructure classes (KnowledgeStore, GoalAuditTrail), always check for public API methods before accessing underscored attributes. Public APIs: `audit_trail.entries`, `len(audit_trail)`, `knowledge_store.keys()`, `knowledge_store.get(key)`, `len(knowledge_store)`.
+
+## 2026-02-11: Production examples had inconsistent `_get_model()` patterns
+
+- **What happened:** investment_thesis and learning_curriculum `_get_model()` returned mock models directly instead of `None`. data_pipeline_fixer used temperature=0.3 instead of 0.5.
+- **Root cause:** Parallel agents didn't coordinate on a canonical pattern. No template was established before writing examples.
+- **Fix:** All `_get_model()` now return `None` when no API key. Caller uses `_get_model() or _build_mock_model()`. Temperature standardized to 0.5.
+- **How to avoid:** When adding a new production example, copy the canonical `_get_model()` from `competitive_research/agent.py` and the `build_*()` caller pattern from the same file. See `docs/decisions.md` "Normalized Production Example Conventions".
+
 ## 2026-02-11: 12 Senior Review Issues Fixed in v1.5.0
 
 The following 12 issues were identified in a senior architecture review and resolved:
